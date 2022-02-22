@@ -294,3 +294,168 @@ class BVM():
         else:
             return ({'sorted_dataset': sorted_dataset, 'attributes': attributes},
                     {'re_id': re_id, 'dCR': dCR, 'pCR': pCR, 'bins': bins,})
+
+class BVMLongitudinal(BVM):
+    "Bayes Vulnerability for Microdata class dedicated to longitudinal vulnerability assessment."
+    
+##### Constructor for longitudinal attacks.
+
+    def __init__(self, datasets, identifiers):
+        "BVM.longitudinal([pandas.DataFrame_1, pandas.DataFrame_2,], [identifier_1, identifier_2,]): Initializes BVM class for longitudinal attacks linked by unique identifier attributes."
+        "identifier_1 is the unique identifier attribute for dataset pandas.DataFrame_1."
+        "pandas.DataFrame_1 is considered to be the focal dataset."
+        
+        try:
+            if type(datasets) is not list or type(identifiers) is not list or len(datasets) != len(identifiers):
+                raise TypeError
+            else:
+                i = 0
+                for i in range(len(datasets)):
+                    if type(datasets[i]) is not pandas.DataFrame or datasets[i].empty:
+                        raise TypeError
+                    elif type(identifiers[i]) is not str or identifiers[i] == "":
+                        raise TypeError
+                    elif identifiers[i] not in datasets[i].columns:
+                        raise ValueError(i)
+                    i = i + 1
+        
+        except TypeError:
+            print("A non-empty list of pandas DataFrames and a non-empty list of strings for the identifying attributes, both with the same legth, must be provided.")
+        except ValueError:
+            print(i, " is not an attribute of the respective dataset.")
+        
+        else:
+                self.dataset = None
+                self.datasets = datasets
+                self.identifiers = identifiers
+                self.quasi_identifiers = None
+                self.all_quasi_identifiers = None
+                self.sensitive_attributes = None
+
+##### Public methods for longitudinal attacks.
+
+    def ids(self):
+        "self.ids()"
+        "Displays the identifiers set by the user to link the datasets."
+        
+        i = 1
+        for identifier in self.identifiers:
+            print("Indetifying attribute for dataset " + str(i) + ": " + identifier + ".")
+            i = i + 1
+
+    def qids(self, quasi_identifiers):
+        "self.qids([['quasi_identifier_1_1','quasi_identifier_1_2',], ['quasi_identifier_2_1','quasi_identifier_2_2',],])"
+        "quasi_identifier_1_1 is an attribute from dataset pandas.DataFrame_1 and quasi_identifier_2_1 is the equivalent attribute from dataset pandas.DataFrame_2."
+        "If all attributes have the same label on all datasets, only one list of quasi-identifiers can be provided."
+        
+        try:
+            if type(quasi_identifiers) is not list:
+                raise TypeError
+            elif type(quasi_identifiers) is list:
+                # If quasi_identifiers[0] is a list, all other entries must also be.
+                if type(quasi_identifiers[0]) is list:
+                    i = 0
+                    for qid_list in quasi_identifiers:
+                        if type(qid_list) is not list:
+                            raise TypeError
+                        elif type(qid_list) is list:
+                            for qid in qid_list:
+                                if type(qid) is not str:
+                                    raise ValueError(qid)
+                                elif qid not in self.datasets[i].columns:
+                                    raise ValueError(qid)
+                        i = i + 1
+                # If quasi_identifiers[0] is a string, all other entries must also be.
+                elif type(quasi_identifiers[0]) is str:
+                    for qid in quasi_identifiers:
+                        i = 0
+                        if type(qid) is not str:
+                            raise ValueError(qid)
+                        for dataset in self.datasets:
+                            if qid not in dataset[i].columns:
+                                raise ValueError(qid)
+                            i = i + 1
+        
+        except TypeError:
+            print("A list of strings or a list of lists of strings must be provided.")
+        except ValueError:
+            print(qid, " is not a string or is not an attribute of the respective dataset.")
+        
+        else:
+            self.quasi_identifiers = quasi_identifiers
+    
+    def sensitive(self, sensitive_attributes):
+        "self.sensitive(['sensitive_attribute_1','sensitive_attribute_2',])"
+        "All sensitive attributes are attributes from dataset pandas.DataFrame_1."
+        
+        try:
+            if type(sensitive_attributes) is not list and type(sensitive_attributes) is not str:
+                raise TypeError
+            elif type(sensitive_attributes) is str:
+                if sensitive_attributes not in self.datasets[0].columns:
+                    s = sensitive_attributes
+                    raise ValueError(s)
+            elif type(sensitive_attributes) is list:
+                for s in sensitive_attributes:
+                    if type(s) is not str:
+                        raise TypeError
+                    elif s not in self.datasets[0].columns:
+                        raise ValueError(s)
+        
+        except TypeError:
+            print("A string or a list of strings must be provided.")
+        except ValueError:
+            print(s, " is not an attribute of the focal dataset.")
+        
+        else:
+            self.sensitive_attributes = sensitive_attributes
+
+    def assess(self):
+        "self.assess()"
+        # Makes use of __setup(self), __compute(self, constants, variables), and _update_variables(self, variables, eq_class, row) from parent class BVM().
+        
+        try:
+            if self.quasi_identifiers is None:
+                raise TypeError
+        
+        except TypeError:
+            print("One or more quasi-identifiers must be assigned.")
+        
+        else:
+            if len(self.quasi_identifiers) > 0:
+                
+                self.__leftouterjoin()
+                
+                "constants --> {sorted_dataset, attributes}"
+                "variables --> {re_id, dCR, pCR, bins}"
+                "variables --> {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA}"
+                constants, variables = self._BVM__setup()
+                
+                variables = self._BVM__compute(constants, variables)
+                
+                return variables
+
+##### Private methods for longitudinal attacks.
+
+    def __leftouterjoin(self):
+        "self.__leftouterjoin()"
+        
+        joined_dataset = self.datasets[0]
+        
+        default_columns = [self.identifiers[0]] + self.quasi_identifiers[0]
+        if self.sensitive_attributes is not None:
+            default_columns.extend(self.sensitive_attributes[0])
+        
+        i = 1
+        for dataset in self.datasets[1:]:
+            columns = [self.identifiers[i]] + self.quasi_identifiers[i]
+            temp = dataset.rename(columns=dict(zip(columns, default_columns)))
+            
+            joined_dataset = pandas.merge(joined_dataset, temp, how='left', on=self.identifiers[0])
+            for column in default_columns[1:len(self.quasi_identifiers[0])+1]:
+                joined_dataset[column] = joined_dataset[column+"_x"].map(str) + "#" + joined_dataset[column+"_y"].map(str)
+                joined_dataset = joined_dataset.drop(columns=[column+"_x", column+"_y"])
+        
+        self.dataset = joined_dataset
+        self.all_quasi_identifiers = self.quasi_identifiers
+        self.quasi_identifiers = self.quasi_identifiers[0]

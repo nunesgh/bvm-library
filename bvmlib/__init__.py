@@ -16,7 +16,7 @@ except:
     raise Exception("pandas is required by bvmlib.")
 
 try:
-    from bvmlib.bvm import BVM
+    from bvmlib.bvm import BVM, BVMLongitudinal
 except:
     raise Exception("bvmlib was not imported.")
 
