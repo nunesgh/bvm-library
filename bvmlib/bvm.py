@@ -119,9 +119,9 @@ class BVM():
 
 ##### Private methods for single-dataset attacks.
 
-    def __update_variables(self, variables, eq_class, eq_class_size, row):
-        "self.__update_variables(self, {re_id, dCR, pCR, bins}, eq_class, eq_class_size, row) --> ({re_id, dCR, pCR, bins}, eq_class)"
-        "self.__update_variables(self, {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA}, eq_class, eq_class_size, row) --> ({re_id, dCR, pCR, bins, att_inf, sensitive_values, CA}, eq_class)"
+    def __update_eq_class(self, variables, eq_class, eq_class_size, row):
+        "self.__update_eq_class(self, {re_id, dCR, pCR, bins}, eq_class, eq_class_size, row) --> ({re_id, dCR, pCR, bins}, eq_class)"
+        "self.__update_eq_class(self, {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA}, eq_class, eq_class_size, row) --> ({re_id, dCR, pCR, bins, att_inf, sensitive_values, CA}, eq_class)"
         
         variables['pCR'] = variables['pCR'] + 1
         class_size_one = False
@@ -134,30 +134,30 @@ class BVM():
             for attribute in self.sensitive_attributes:
                 "counts --> dict_values (dict view, not list) of counts for all possible values of attribute"
                 counts = variables['sensitive_values'][attribute].values()
-
+                
                 "max_value --> number of entries for the most common value of attribute"
                 max_value = max(counts)
-
+                
                 "possible_values --> number of possible values for attribute"
                 possible_values = len(counts)
-
+                
                 try:
                     if class_size != sum(counts):
                         raise ValueError(class_size, counts, self.quasi_identifiers, attribute)
-
+                
                 except ValueError:
                     print("class_size (=" + str(class_size) + ") and counts (=" + str(sum(counts)) + ") error!\n" +
                           "QID: " + str(self.quasi_identifiers) + ". Sensitive attribute: " + attribute + ".")
-
+                
                 b = round(100 * max_value/class_size)
                 variables['bins'][attribute].update({str(b): variables['bins'][attribute][str(b)] + class_size})
-
+                
                 variables['CA'][attribute].update(p = variables['CA'][attribute]['p'] + max_value)
                 if possible_values == 1:
                     variables['CA'][attribute].update(d = variables['CA'][attribute]['d'] + max_value)
                     if max_value == 1:
                         class_size_one = True
-
+                
                 variables['sensitive_values'][attribute].clear()
         else:
             class_size = eq_class_size
@@ -175,7 +175,7 @@ class BVM():
             except ValueError:
                 print("class_size (=" + str(class_size) + ") and class_size_one error!\n" +
                       "QID: " + str(self.quasi_identifiers) + ".")
-            
+        
         # Updates eq_class to new equivalence class.
         eq_class = row[0:len(self.quasi_identifiers)]
         eq_class_size = 0
@@ -192,7 +192,7 @@ class BVM():
             if eq_class == ():
                 eq_class = row[0:len(self.quasi_identifiers)]
             elif row[0:len(self.quasi_identifiers)] != eq_class:
-                variables, eq_class, eq_class_size = self.__update_variables(variables, eq_class, eq_class_size, row)
+                variables, eq_class, eq_class_size = self.__update_eq_class(variables, eq_class, eq_class_size, row)
             
             if self.sensitive_attributes is not None:
                 it = 0
@@ -207,7 +207,7 @@ class BVM():
                 eq_class_size += 1
         
         # For accounting for the last equivalence class.
-        variables, eq_class, eq_class_size = self.__update_variables(variables, eq_class, eq_class_size, row)
+        variables, eq_class, eq_class_size = self.__update_eq_class(variables, eq_class, eq_class_size, row)
         
         dataset_size = constants['sorted_dataset'].shape[0]
         
@@ -231,14 +231,14 @@ class BVM():
         if self.sensitive_attributes is not None:
             for attribute in self.sensitive_attributes:
                 variables['CA'][attribute].update(d = variables['CA'][attribute]['d']/dataset_size)
-
+                
                 if variables['CA'][attribute]['d'] == 1:
                     variables['CA'][attribute].update(d = variables['CA'][attribute]['d'] - 1)
-
+                
                 most_probable_count = constants['sorted_dataset'].groupby(attribute).size().max()
-
+                
                 variables['CA'][attribute].update(p = variables['CA'][attribute]['p']/most_probable_count)
-
+                
                 d = {'QID': str(self.quasi_identifiers), 'Sensitive': attribute, 'dCA': variables['CA'][attribute]['d'],
                      'pCA': variables['CA'][attribute]['p'], 'Prior': most_probable_count/dataset_size,
                      'Posterior': (variables['CA'][attribute]['p'] * most_probable_count)/dataset_size,
@@ -299,7 +299,7 @@ class BVM():
 
 class BVMLongitudinal(BVM):
     "Bayes Vulnerability for Microdata class dedicated to longitudinal vulnerability assessment."
-    
+
 ##### Constructor for longitudinal attacks.
 
     def __init__(self, datasets, identifiers):
@@ -385,7 +385,7 @@ class BVMLongitudinal(BVM):
         
         else:
             self.quasi_identifiers = quasi_identifiers
-    
+
     def sensitive(self, sensitive_attributes):
         "self.sensitive(['sensitive_attribute_1','sensitive_attribute_2',])"
         "All sensitive attributes are attributes from dataset pandas.DataFrame_1."
@@ -410,7 +410,7 @@ class BVMLongitudinal(BVM):
 
     def assess(self):
         "self.assess()"
-        # Makes use of __setup(self), __compute(self, constants, variables), and _update_variables(self, variables, eq_class, eq_class_size, row) from parent class BVM().
+        # Makes use of __setup(self), __compute(self, constants, variables), and __update_eq_class(self, variables, eq_class, eq_class_size, row) from parent class BVM().
         
         try:
             if self.quasi_identifiers is None:
