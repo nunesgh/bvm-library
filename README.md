@@ -1,5 +1,7 @@
 # BVM library
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.6533704.svg)](https://doi.org/10.5281/zenodo.6533704)
+
 Quantitative Information Flow assessment of vulnerability for microdata datasets using Bayes Vulnerability.
 
 DOI: [10.5281/zenodo.6533704](https://doi.org/10.5281/zenodo.6533704).
