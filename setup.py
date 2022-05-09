@@ -14,8 +14,8 @@ def get_version(file_path):
             return line.split(delim)[1]
 
 install_requires = [
-    'numpy >= 1.22.2',
-    'pandas >= 1.4.1'
+    'numpy >= 1.22.3',
+    'pandas >= 1.4.2'
 ]
 
 setuptools.setup(
@@ -34,5 +34,5 @@ setuptools.setup(
         long_description_content_type='text/markdown',
         packages=setuptools.find_packages(),
         install_requires=install_requires,
-        python_requires='>=3.9.10'
+        python_requires='>=3.10.4'
 )
