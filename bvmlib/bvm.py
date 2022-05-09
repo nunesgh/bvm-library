@@ -131,48 +131,55 @@ class BVM():
 
 ##### Private methods for single-dataset attacks.
 
-    def __update_variables(self, variables, eq_class, row):
-        "self.__update_variables(self, {re_id, dCR, pCR, bins}, eq_class, row) --> ({re_id, dCR, pCR, bins}, eq_class)"
-        "self.__update_variables(self, {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA}, eq_class, row) --> ({re_id, dCR, pCR, bins, att_inf, sensitive_values, CA}, eq_class)"
+    def __update_variables(self, variables, eq_class, eq_class_size, row):
+        "self.__update_variables(self, {re_id, dCR, pCR, bins}, eq_class, eq_class_size, row) --> ({re_id, dCR, pCR, bins}, eq_class)"
+        "self.__update_variables(self, {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA}, eq_class, eq_class_size, row) --> ({re_id, dCR, pCR, bins, att_inf, sensitive_values, CA}, eq_class)"
         # Computes variables['CA'] values from variables['sensitive_values'] and updates variables['CA'].
         
         variables['pCR'] = variables['pCR'] + 1
         class_size_one = False
         
-        class_size = sum(variables['sensitive_values'][self.sensitive_attributes[0]].values())
-        b = round(100 * 1/class_size)
-        variables['bins']['re_id'].update({str(b): variables['bins']['re_id'][str(b)] + class_size})
+        if self.sensitive_attributes is not None:
+            class_size = sum(variables['sensitive_values'][self.sensitive_attributes[0]].values())
+            b = round(100 * 1/class_size)
+            variables['bins']['re_id'].update({str(b): variables['bins']['re_id'][str(b)] + class_size})
+            
+            for attribute in self.sensitive_attributes:
+                "counts --> dict_values (dict view, not list) of counts for all possible values of attribute"
+                counts = variables['sensitive_values'][attribute].values()
+
+                "max_value --> number of entries for the most common value of attribute"
+                max_value = max(counts)
+
+                "possible_values --> number of possible values for attribute"
+                possible_values = len(counts)
+
+                try:
+                    if class_size != sum(counts):
+                        raise ValueError(class_size, counts, self.quasi_identifiers, attribute)
+
+                except ValueError:
+                    print("class_size (=" + str(class_size) + ") and counts (=" + str(sum(counts)) + ") error!\n" +
+                          "QID: " + str(self.quasi_identifiers) + ". Sensitive attribute: " + attribute + ".")
+
+                b = round(100 * max_value/class_size)
+                variables['bins'][attribute].update({str(b): variables['bins'][attribute][str(b)] + class_size})
+
+                variables['CA'][attribute].update(p = variables['CA'][attribute]['p'] + max_value)
+                if possible_values == 1:
+                    variables['CA'][attribute].update(d = variables['CA'][attribute]['d'] + max_value)
+                    if max_value == 1:
+                        class_size_one = True
+
+                # Resets sensitive_values for given attribute.
+                variables['sensitive_values'][attribute].clear()
+        else:
+            class_size = eq_class_size
+            b = round(100 * 1/class_size)
+            variables['bins']['re_id'].update({str(b): variables['bins']['re_id'][str(b)] + class_size})
+            if class_size == 1:
+                class_size_one = True
         
-        for attribute in self.sensitive_attributes:
-            "counts --> dict_values (dict view, not list) of counts for all possible values of attribute"
-            counts = variables['sensitive_values'][attribute].values()
-            
-            "max_value --> number of entries for the most common value of attribute"
-            max_value = max(counts)
-            
-            "possible_values --> number of possible values for attribute"
-            possible_values = len(counts)
-            
-            try:
-                if class_size != sum(counts):
-                    raise ValueError(class_size, counts, self.quasi_identifiers, attribute)
-            
-            except ValueError:
-                print("class_size (=" + str(class_size) + ") and counts (=" + str(sum(counts)) + ") error!\n" +
-                      "QID: " + str(self.quasi_identifiers) + ". Sensitive attribute: " + attribute + ".")
-            
-            b = round(100 * max_value/class_size)
-            variables['bins'][attribute].update({str(b): variables['bins'][attribute][str(b)] + class_size})
-            
-            variables['CA'][attribute].update(p = variables['CA'][attribute]['p'] + max_value)
-            if possible_values == 1:
-                variables['CA'][attribute].update(d = variables['CA'][attribute]['d'] + max_value)
-                if max_value == 1:
-                    class_size_one = True
-            
-            # Resets sensitiveValues for given attribute.
-            variables['sensitive_values'][attribute].clear()
-            
         if class_size_one:
             variables['dCR'] = variables['dCR'] + 1
             try:
@@ -185,32 +192,36 @@ class BVM():
             
         # Updates eq_class to new equivalence class.
         eq_class = row[0:len(self.quasi_identifiers)]
+        eq_class_size = 0
         
-        return (variables, eq_class)
+        return (variables, eq_class, eq_class_size)
 
     def __compute(self, constants, variables):
         "self.__compute(self, {re_id, dCR, pCR, bins}) --> ({sorted_dataset, attributes}, {re_id, dCR, pCR, bins})"
         "self.__compute(self, {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA}) --> ({sorted_dataset, attributes}, {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA})"
         
         eq_class = ()
+        eq_class_size = 0
         for row in constants['sorted_dataset'][constants['attributes']].itertuples(index=False):
             if eq_class == ():
                 eq_class = row[0:len(self.quasi_identifiers)]
             elif row[0:len(self.quasi_identifiers)] != eq_class:
-                variables, eq_class = self.__update_variables(variables, eq_class, row)
+                variables, eq_class, eq_class_size = self.__update_variables(variables, eq_class, eq_class_size, row)
             
-            # Keeps on updating CR values and sensitive_values.
-            it = 0
-            for attribute in self.sensitive_attributes:
-                value = row[len(self.quasi_identifiers)+it]
-                if str(value) in variables['sensitive_values'][attribute]:
-                    variables['sensitive_values'][attribute].update({str(value): variables['sensitive_values'][attribute][str(value)] + 1})
-                else:
-                    variables['sensitive_values'][attribute].update({str(value): 1})
-                it += 1
+            if self.sensitive_attributes is not None:
+                it = 0
+                for attribute in self.sensitive_attributes:
+                    value = row[len(self.quasi_identifiers)+it]
+                    if str(value) in variables['sensitive_values'][attribute]:
+                        variables['sensitive_values'][attribute].update({str(value): variables['sensitive_values'][attribute][str(value)] + 1})
+                    else:
+                        variables['sensitive_values'][attribute].update({str(value): 1})
+                    it += 1
+            else:
+                eq_class_size += 1
         
         # For accounting for the last equivalence class.
-        variables, eq_class = self.__update_variables(variables, eq_class, row)
+        variables, eq_class, eq_class_size = self.__update_variables(variables, eq_class, eq_class_size, row)
         
         dataset_size = constants['sorted_dataset'].shape[0]
         
@@ -219,30 +230,35 @@ class BVM():
         else:
             variables['dCR'] = variables['dCR']/dataset_size
         
-        for case in self.sensitive_attributes + ['re_id']:
+        if self.sensitive_attributes is not None:
+            for case in self.sensitive_attributes + ['re_id']:
+                for i in range(101):
+                    variables['bins'][case].update({str(i): variables['bins'][case][str(i)]/dataset_size})
+        else:
             for i in range(101):
-                variables['bins'][case].update({str(i): variables['bins'][case][str(i)]/dataset_size})
+                variables['bins']['re_id'].update({str(i): variables['bins']['re_id'][str(i)]/dataset_size})
         
         d = {'QID': str(self.quasi_identifiers), 'dCR': variables['dCR'], 'pCR': variables['pCR'], 'Prior': 1/dataset_size,
              'Posterior': variables['pCR']/dataset_size, 'Histogram': str(variables['bins']['re_id'])}
         variables['re_id'] = pandas.concat([variables['re_id'], pandas.DataFrame(data = d, index=[0])], ignore_index = True)
         
-        for attribute in self.sensitive_attributes:
-            variables['CA'][attribute].update(d = variables['CA'][attribute]['d']/dataset_size)
-            
-            if variables['CA'][attribute]['d'] == 1:
-                variables['CA'][attribute].update(d = variables['CA'][attribute]['d'] - 1)
-            
-            most_probable_count = constants['sorted_dataset'].groupby(attribute).size().max()
-            
-            variables['CA'][attribute].update(p = variables['CA'][attribute]['p']/most_probable_count)
-            
-            d = {'QID': str(self.quasi_identifiers), 'Sensitive': attribute, 'dCA': variables['CA'][attribute]['d'],
-                 'pCA': variables['CA'][attribute]['p'], 'Prior': most_probable_count/dataset_size,
-                 'Posterior': (variables['CA'][attribute]['p'] * most_probable_count)/dataset_size,
-                 'Histogram': str(variables['bins'][attribute])}
-            variables['att_inf'] = pandas.concat([variables['att_inf'], pandas.DataFrame(data = d, index=[0])],
-                                                 ignore_index = True)
+        if self.sensitive_attributes is not None:
+            for attribute in self.sensitive_attributes:
+                variables['CA'][attribute].update(d = variables['CA'][attribute]['d']/dataset_size)
+
+                if variables['CA'][attribute]['d'] == 1:
+                    variables['CA'][attribute].update(d = variables['CA'][attribute]['d'] - 1)
+
+                most_probable_count = constants['sorted_dataset'].groupby(attribute).size().max()
+
+                variables['CA'][attribute].update(p = variables['CA'][attribute]['p']/most_probable_count)
+
+                d = {'QID': str(self.quasi_identifiers), 'Sensitive': attribute, 'dCA': variables['CA'][attribute]['d'],
+                     'pCA': variables['CA'][attribute]['p'], 'Prior': most_probable_count/dataset_size,
+                     'Posterior': (variables['CA'][attribute]['p'] * most_probable_count)/dataset_size,
+                     'Histogram': str(variables['bins'][attribute])}
+                variables['att_inf'] = pandas.concat([variables['att_inf'], pandas.DataFrame(data = d, index=[0])],
+                                                     ignore_index = True)
         
         return variables
 
