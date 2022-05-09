@@ -2,6 +2,8 @@
 
 Quantitative Information Flow assessment of vulnerability for microdata datasets using Bayes Vulnerability.
 
+DOI: [10.5281/zenodo.6533704](https://doi.org/10.5281/zenodo.6533704)
+
 ## Installation
 
 Use the package manager [pip](https://pip.pypa.io/en/stable/) to install `bvmlib`.
