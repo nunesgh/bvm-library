@@ -37,12 +37,8 @@ class BVM():
         "self.ids(['id_1',])"
         
         try:
-            if type(identifiers) is not list and type(identifiers) is not str:
+            if type(identifiers) is not list:
                 raise TypeError
-            elif type(identifiers) is str:
-                if identifiers not in self.dataset.columns:
-                    i = identifiers
-                    raise ValueError(identifiers)
             elif type(identifiers) is list:
                 for i in identifiers:
                     if type(i) is not str:
@@ -51,7 +47,7 @@ class BVM():
                         raise ValueError(i)
         
         except TypeError:
-            print("A string or a list of strings must be provided.")
+            print("A list of strings must be provided.")
         except ValueError:
             print(i, " is not an attribute of the dataset.")
         
@@ -62,12 +58,8 @@ class BVM():
         "self.qids(['quasi_identifier_1','quasi_identifier_2',])"
         
         try:
-            if type(quasi_identifiers) is not list and type(quasi_identifiers) is not str:
+            if type(quasi_identifiers) is not list:
                 raise TypeError
-            elif type(quasi_identifiers) is str:
-                if quasi_identifiers not in self.dataset.columns:
-                    qid = quasi_identifiers
-                    raise ValueError(quasi_identifiers)
             elif type(quasi_identifiers) is list:
                 for qid in quasi_identifiers:
                     if type(qid) is not str:
@@ -76,7 +68,7 @@ class BVM():
                         raise ValueError(qid)
         
         except TypeError:
-            print("A string or a list of strings must be provided.")
+            print("A list of strings must be provided.")
         except ValueError:
             print(qid, " is not an attribute of the dataset.")
         
@@ -87,12 +79,8 @@ class BVM():
         "self.sensitive(['sensitive_attribute_1','sensitive_attribute_2',])"
         
         try:
-            if type(sensitive_attributes) is not list and type(sensitive_attributes) is not str:
+            if type(sensitive_attributes) is not list:
                 raise TypeError
-            elif type(sensitive_attributes) is str:
-                if sensitive_attributes not in self.dataset.columns:
-                    s = sensitive_attributes
-                    raise ValueError(s)
             elif type(sensitive_attributes) is list:
                 for s in sensitive_attributes:
                     if type(s) is not str:
@@ -101,7 +89,7 @@ class BVM():
                         raise ValueError(s)
         
         except TypeError:
-            print("A string or a list of strings must be provided.")
+            print("A list of strings must be provided.")
         except ValueError:
             print(s, " is not an attribute of the dataset.")
         
@@ -134,7 +122,6 @@ class BVM():
     def __update_variables(self, variables, eq_class, eq_class_size, row):
         "self.__update_variables(self, {re_id, dCR, pCR, bins}, eq_class, eq_class_size, row) --> ({re_id, dCR, pCR, bins}, eq_class)"
         "self.__update_variables(self, {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA}, eq_class, eq_class_size, row) --> ({re_id, dCR, pCR, bins, att_inf, sensitive_values, CA}, eq_class)"
-        # Computes variables['CA'] values from variables['sensitive_values'] and updates variables['CA'].
         
         variables['pCR'] = variables['pCR'] + 1
         class_size_one = False
@@ -171,7 +158,6 @@ class BVM():
                     if max_value == 1:
                         class_size_one = True
 
-                # Resets sensitive_values for given attribute.
                 variables['sensitive_values'][attribute].clear()
         else:
             class_size = eq_class_size
@@ -405,12 +391,8 @@ class BVMLongitudinal(BVM):
         "All sensitive attributes are attributes from dataset pandas.DataFrame_1."
         
         try:
-            if type(sensitive_attributes) is not list and type(sensitive_attributes) is not str:
+            if type(sensitive_attributes) is not list:
                 raise TypeError
-            elif type(sensitive_attributes) is str:
-                if sensitive_attributes not in self.datasets[0].columns:
-                    s = sensitive_attributes
-                    raise ValueError(s)
             elif type(sensitive_attributes) is list:
                 for s in sensitive_attributes:
                     if type(s) is not str:
@@ -419,7 +401,7 @@ class BVMLongitudinal(BVM):
                         raise ValueError(s)
         
         except TypeError:
-            print("A string or a list of strings must be provided.")
+            print("A list of strings must be provided.")
         except ValueError:
             print(s, " is not an attribute of the focal dataset.")
         
@@ -428,7 +410,7 @@ class BVMLongitudinal(BVM):
 
     def assess(self):
         "self.assess()"
-        # Makes use of __setup(self), __compute(self, constants, variables), and _update_variables(self, variables, eq_class, row) from parent class BVM().
+        # Makes use of __setup(self), __compute(self, constants, variables), and _update_variables(self, variables, eq_class, eq_class_size, row) from parent class BVM().
         
         try:
             if self.quasi_identifiers is None:
