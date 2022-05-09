@@ -4,7 +4,7 @@ Quantitative Information Flow assessment of vulnerability for microdata datasets
 
 ## Installation
 
-Use the package manager [pip](https://pip.pypa.io/en/stable/) to install bvmlib.
+Use the package manager [pip](https://pip.pypa.io/en/stable/) to install `bvmlib`.
 
 ```bash
 pip install bvmlib
