@@ -6,6 +6,8 @@ Quantitative Information Flow assessment of vulnerability for microdata datasets
 
 DOI: [10.5281/zenodo.6533704](https://doi.org/10.5281/zenodo.6533704).
 
+This repository provides an implementation of the paper [Flexible and scalable privacy assessment for very large datasets with an application to official governmental microdata](https://arxiv.org/abs/2204.13734), to appear in [PoPETs 2022](https://petsymposium.org/2022/program.php). Please refer to the folder [examples](https://github.com/nunesgh/bvm-library/tree/main/examples#inep-1-experiments) for the Notebooks containing the actual results for the experiments performed.
+
 ## Installation
 
 Use the package manager [pip](https://pip.pypa.io/en/stable/) to install `bvmlib`.
@@ -44,6 +46,26 @@ print(I_results['re_id'])
 # Print attribute-inference results (only if computed).
 print(I_results['att_inf'])
 ```
+
+### Additional examples
+
+Please refer to the folder [examples](https://github.com/nunesgh/bvm-library/blob/main/examples) for additional usage examples, including attacks on longitudinal collections of datasets.
+
+### Note on the results
+
+For privacy assessment of Collective Re-identification (**CRS** / **CRL**), for each list of quasi-identifying attributes (**QID**), the following results are computed:
+- **dCR**: corresponds to the deterministic metric;
+- **pCR**: corresponds to the probabilistic metric;
+- **Prior**: corresponds to the adversary's prior knowledge in a probabilistic attack;
+- **Posterior**: corresponds to the adversary's posterior knowledge in a probabilistic attack;
+- **Histogram**: corresponds to the distribution of individuals according to the chance of re-identification.
+
+For privacy assessment of Collective (sensitive) Attribute-inference (**CAS** / **CAL**), for each list of quasi-identifying attributes (**QID**) and for each sensitive attribute (**Sensitive**), the following results are computed:
+- **dCA**: corresponds to the deterministic metric;
+- **pCA**: corresponds to the probabilistic metric;
+- **Prior**: corresponds to the adversary's prior knowledge in a probabilistic attack;
+- **Posterior**: corresponds to the adversary's posterior knowledge in a probabilistic attack;
+- **Histogram**: corresponds to the distribution of individuals according to the chance of attribute-inference.
 
 ## Contributing
 
