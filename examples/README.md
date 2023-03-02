@@ -20,6 +20,8 @@ For the Adult dataset, the following attributes are used as quasi-identifiers: `
 
 For the US Census Data (1990) dataset, the following attributes are used as quasi-identifiers: `dAge`, `dAncstry1`, `dAncstry2`, `iClass`, `iEnglish`, `dHour89`, `iLang1`, `iMarital`, `iMeans`, `dOccup`, `dPOB`, and `iSex`. Also, the following attributes are used as sensitive attributes: `iCitizen` and `dRearning`. All the attributes are briefly described within the notebook.
 
+As of version 1.1, this example also computes the *information worth* given the provided *worth assignments*, as proposed in *M. S. Alvim, A. Scedrov, and F. B. Schneider, "When Not All Bits Are Equal: Worth-Based Information Flow", in Principles of Security and Trust, vol. 8414, M. Abadi and S. Kremer, Eds. Berlin, Heidelberg: Springer Berlin Heidelberg, 2014, pp. 120–139* (DOI: [10.1007/978-3-642-54792-8_7](https://doi.org/10.1007/978-3-642-54792-8_7)).
+
 ## INEP [^inep] experiments
 
 The following examples are the actual results for the experiments performed as part of the following publications:

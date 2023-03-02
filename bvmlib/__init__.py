@@ -36,4 +36,4 @@ try:
 except:
     raise Exception("bvmlib was not imported.")
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'

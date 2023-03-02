@@ -48,6 +48,7 @@ class BVM():
             self.identifiers = None
             self.quasi_identifiers = None
             self.sensitive_attributes = None
+            self.worth_assignment = None
 
 ##### Public methods for single-dataset attacks.
 
@@ -114,6 +115,41 @@ class BVM():
         else:
             self.sensitive_attributes = sensitive_attributes
 
+    def worth(self, sensitive_attribute, worth_assignment):
+        "self.worth('sensitive_attribute', {'val_1':worth_1,'val_2':worth_2,})"
+
+        # Must be run once for each sensitive attribute.
+
+        try:
+            if self.sensitive_attributes is None:
+                raise AttributeError
+            elif type(sensitive_attribute) is not str:
+                raise TypeError
+            elif sensitive_attribute not in self.sensitive_attributes:
+                raise ValueError(s)
+            elif type(worth_assignment) is not dict:
+                raise TypeError
+
+        except AttributeError:
+            print("The sensitive attributes have not been defined yet.")
+        except TypeError:
+            print("A string and a dictionary must be provided.")
+        except ValueError:
+            print(s, " is not a defined sensitive attribute.")
+
+        else:
+            try:
+                if any([True if worth < 0 else False for value, worth in worth_assignment.items()]):
+                    raise TypeError
+
+            except TypeError:
+                print("Worth assignment cannot be negative!")
+
+            else:
+                if self.worth_assignment is None:
+                    self.worth_assignment = {}
+                self.worth_assignment[sensitive_attribute] = worth_assignment
+
     def assess(self):
         "self.assess()"
 
@@ -129,6 +165,7 @@ class BVM():
                 "constants --> {sorted_dataset, attributes}"
                 "variables --> {re_id, dCR, pCR, bins}"
                 "variables --> {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA}"
+                "variables --> {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA, information_worth, CW}"
                 constants, variables = self.__setup()
 
                 variables = self.__compute(constants, variables)
@@ -140,7 +177,8 @@ class BVM():
     def __update_eq_class(self, variables, eq_class, eq_class_size, row):
         "self.__update_eq_class(self, {re_id, dCR, pCR, bins}, eq_class, eq_class_size, row) --> ({re_id, dCR, pCR, bins}, eq_class)"
         "self.__update_eq_class(self, {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA}, eq_class, eq_class_size, row) --> ({re_id, dCR, pCR, bins, att_inf, sensitive_values, CA}, eq_class)"
-        
+        "self.__update_eq_class(self, {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA, information_worth, CW}, eq_class, eq_class_size, row) --> ({re_id, dCR, pCR, bins, att_inf, sensitive_values, CA, information_worth, CW}, eq_class)"
+
         variables['pCR'] = variables['pCR'] + 1
         class_size_one = False
 
@@ -175,7 +213,12 @@ class BVM():
                     variables['CA'][attribute].update(d = variables['CA'][attribute]['d'] + max_value)
                     if max_value == 1:
                         class_size_one = True
-                
+
+                if (self.worth_assignment is not None) and (attribute in self.worth_assignment):
+                    partition_worth = {value : count * self.worth_assignment[attribute][value] for value, count in {str(v) : c for v, c in variables['sensitive_values'][attribute].items()}.items() if value in self.worth_assignment[attribute]}
+                    if len(partition_worth) > 0:
+                        variables['CW'][attribute].update(posterior = variables['CW'][attribute]['posterior'] + max(partition_worth.values()))
+
                 variables['sensitive_values'][attribute].clear()
         else:
             class_size = eq_class_size
@@ -203,7 +246,8 @@ class BVM():
     def __compute(self, constants, variables):
         "self.__compute(self, {re_id, dCR, pCR, bins}) --> ({sorted_dataset, attributes}, {re_id, dCR, pCR, bins})"
         "self.__compute(self, {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA}) --> ({sorted_dataset, attributes}, {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA})"
-        
+        "self.__compute(self, {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA, information_worth, CW}) --> ({sorted_dataset, attributes}, {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA, information_worth, CW})"
+
         eq_class = ()
         eq_class_size = 0
         for row in constants['sorted_dataset'][constants['attributes']].itertuples(index=False):
@@ -252,9 +296,10 @@ class BVM():
 
                 if variables['CA'][attribute]['d'] == 1:
                     variables['CA'][attribute].update(d = variables['CA'][attribute]['d'] - 1)
-                
-                most_probable_count = constants['sorted_dataset'].groupby(attribute).size().max()
-                
+
+                values_counts = constants['sorted_dataset'].groupby(attribute).size()
+                most_probable_count = values_counts.max()
+
                 variables['CA'][attribute].update(p = variables['CA'][attribute]['p']/most_probable_count)
 
                 d = {'QID': str(self.quasi_identifiers), 'Sensitive': attribute, 'dCA': variables['CA'][attribute]['d'],
@@ -263,13 +308,28 @@ class BVM():
                      'Histogram': str(variables['bins'][attribute])}
                 variables['att_inf'] = pandas.concat([variables['att_inf'], pandas.DataFrame(data = d, index=[0])],
                                                      ignore_index = True)
-        
+
+                if (self.worth_assignment is not None) and (attribute in self.worth_assignment):
+                    prior_worth = {value : (count/dataset_size) * self.worth_assignment[attribute][value] for value, count in {str(v) : c for v, c in values_counts.to_dict().items()}.items() if value in self.worth_assignment[attribute]}
+
+                    if len(prior_worth) > 0:
+                        variables['CW'][attribute].update(prior = max(prior_worth.values()))
+
+                    variables['CW'][attribute].update(posterior = variables['CW'][attribute]['posterior']/dataset_size)
+
+                    d = {'QID': str(self.quasi_identifiers), 'Sensitive': attribute,
+                         'Prior Worth': variables['CW'][attribute]['prior'],
+                         'Posterior Worth': variables['CW'][attribute]['posterior']}
+                    variables['information_worth'] = pandas.concat([variables['information_worth'], pandas.DataFrame(data = d, index=[0])],
+                                                                   ignore_index = True)
+
         return variables
 
     def __setup(self):
         "self.__setup() --> ({sorted_dataset, attributes}, {re_id, dCR, pCR, bins})"
         "self.__setup() --> ({sorted_dataset, attributes}, {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA})"
-        
+        "self.__setup() --> ({sorted_dataset, attributes}, {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA, information_worth, CW})"
+
         sorted_dataset = self.dataset.sort_values(by=self.quasi_identifiers, axis='index', inplace=False, kind='mergesort')
 
         re_id = pandas.DataFrame(columns=['QID', 'dCR', 'pCR', 'Prior', 'Posterior', 'Histogram'])
@@ -279,7 +339,7 @@ class BVM():
 
         "bins --> {'re_id':{'0%':a,'1%':b,'2%':c,...,'100%':d},}"
         "bins --> {'re_id':{'0%':a,'1%':b,'2%':c,...,'100%':d},'attr_1':{'0%':e,...,'100%':f},}"
-        "bins: 'x%' for chance of re-identification or attribute-inference, y% for amount of rows with 'x%' chance"
+        "bins: 'x%' for chance of re-identification or attribute-inference, y% for amount of rows with 'x%' chance."
         bins = {}
         bins['re_id'] = {}
         for i in range(101):
@@ -293,11 +353,11 @@ class BVM():
             att_inf = pandas.DataFrame(columns=['QID', 'Sensitive', 'dCA', 'pCA', 'Prior', 'Posterior', 'Histogram'])
 
             "sensitive_values --> {'attr_1':{'val_1':count_1,'val_2':count_2},'attr_2':{'val_1':count_1},}"
-            "sensitive_values: attr_i from self.sensitive_attributes, val_j from attr_i, count_k from val_j"
+            "sensitive_values: attr_i from self.sensitive_attributes, val_j from attr_i, count_k from val_j."
             sensitive_values = {}
 
             "CA --> {'attr_1':{'d':x,'p':y},'attr_2':{'d':a,'p':b},}"
-            "CA: attr_i from self.sensitive_attributes, 'd' for dCA value, 'p' for pCA value"
+            "CA: attr_i from self.sensitive_attributes, 'd' for dCA value, 'p' for pCA value."
             CA = {}
 
             for attribute in self.sensitive_attributes:
@@ -307,10 +367,25 @@ class BVM():
                 for i in range(101):
                     bins[attribute].update({str(i): 0})
                 attributes.append(attribute)
-            
-            return ({'sorted_dataset': sorted_dataset, 'attributes': attributes},
-                    {'re_id': re_id, 'dCR': dCR, 'pCR': pCR, 'bins': bins, 'att_inf': att_inf,
-                     'sensitive_values': sensitive_values, 'CA': CA})
+
+            if self.worth_assignment is not None:
+                information_worth = pandas.DataFrame(columns=['QID', 'Sensitive', 'Prior Worth', 'Posterior Worth'])
+
+                "CW --> {'attr_1':{'prior':prior_worth_1,'posterior':posterior_worth_1},'attr_2':{'prior':prior_worth_2,'posterior':posterior_worth_2},}"
+                "CW: attr_i from self.sensitive_attributes, 'prior' for the prior worth, 'posterior' for the posterior worth."
+                CW = {}
+
+                for attribute in iter(self.worth_assignment):
+                    CW[attribute] = {'prior': 0,'posterior': 0}
+
+                return ({'sorted_dataset': sorted_dataset, 'attributes': attributes},
+                        {'re_id': re_id, 'dCR': dCR, 'pCR': pCR, 'bins': bins,
+                        'att_inf': att_inf, 'sensitive_values': sensitive_values, 'CA': CA,
+                        'information_worth': information_worth, 'CW': CW})
+            else:
+                return ({'sorted_dataset': sorted_dataset, 'attributes': attributes},
+                        {'re_id': re_id, 'dCR': dCR, 'pCR': pCR, 'bins': bins,
+                        'att_inf': att_inf, 'sensitive_values': sensitive_values, 'CA': CA})
         else:
             return ({'sorted_dataset': sorted_dataset, 'attributes': attributes},
                     {'re_id': re_id, 'dCR': dCR, 'pCR': pCR, 'bins': bins,})
