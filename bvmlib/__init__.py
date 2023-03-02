@@ -5,7 +5,7 @@ Quantitative Information Flow assessment of vulnerability
 for microdata datasets using Bayes Vulnerability.
 
 bvmlib - Bayes Vulnerability for Microdata library
-Copyright (C) 2021 Gabriel Henrique Lopes Gomes Alves Nuens
+Copyright (C) 2021 Gabriel Henrique Lopes Gomes Alves Nunes
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
