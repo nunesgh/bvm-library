@@ -3,7 +3,7 @@ import setuptools
 
 def read(file_path):
     here = os.path.abspath(os.path.dirname(__file__))
-    
+
     with open(os.path.join(here, file_path), encoding='utf-8') as f:
         return f.read()
 
@@ -14,8 +14,8 @@ def get_version(file_path):
             return line.split(delim)[1]
 
 install_requires = [
-    'numpy >= 1.22.3',
-    'pandas >= 1.4.2'
+    'numpy >= 1.24.2',
+    'pandas >= 1.5.3'
 ]
 
 setuptools.setup(
@@ -34,5 +34,5 @@ setuptools.setup(
         long_description_content_type='text/markdown',
         packages=setuptools.find_packages(),
         install_requires=install_requires,
-        python_requires='>=3.10.4'
+        python_requires='>=3.10.6'
 )

@@ -22,6 +22,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 try:
+    from dataclasses import dataclass
+except:
+    raise Exception("dataclass is required by qifprivlib.")
+
+try:
     import numpy
 except:
     raise Exception("numpy is required by bvmlib.")

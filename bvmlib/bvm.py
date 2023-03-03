@@ -21,9 +21,11 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+from dataclasses import dataclass
 import numpy
 import pandas
 
+@dataclass
 class BVM():
     "Bayes Vulnerability for Microdata class dedicated to single-dataset vulnerability assessment."
 
@@ -390,6 +392,7 @@ class BVM():
             return ({'sorted_dataset': sorted_dataset, 'attributes': attributes},
                     {'re_id': re_id, 'dCR': dCR, 'pCR': pCR, 'bins': bins,})
 
+@dataclass
 class BVMLongitudinal(BVM):
     "Bayes Vulnerability for Microdata class dedicated to longitudinal vulnerability assessment."
 
