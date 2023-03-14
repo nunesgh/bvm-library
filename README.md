@@ -18,6 +18,12 @@ pip install bvmlib
 
 ## Usage
 
+**Warning: Please fill `NA` and `NaN` values!**
+
+A fix will be provided in a later version.
+
+Meanwhile, consider using the pandas `.fillna()` [method](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.fillna.html) before calling the `BVM()` class, e.g. when creating the pandas DataFrame, as shown below.
+
 ### Single-dataset
 
 ```python
@@ -26,7 +32,7 @@ from bvmlib.bvm import BVM
 
 # Create a pandas DataFrame for your data.
 # For instance:
-df = pandas.read_csv(file.csv)
+df = pandas.read_csv(file.csv).fillna(-1)
 
 # Create an instance.
 I = BVM(df)
