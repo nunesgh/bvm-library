@@ -81,9 +81,6 @@ Please make sure to update tests as appropriate.
 
 ## License
 
-[GNU LGPLv3](https://choosealicense.com/licenses/lgpl-3.0/) [^compatibility].
+[GNU LGPLv3](https://choosealicense.com/licenses/lgpl-3.0/).
 
-[^compatibility]:
-    To understand how the various GNU licenses are compatible with each other, please refer to:
-
-    https://www.gnu.org/licenses/gpl-faq.html#AllCompatibility
+To understand how the various GNU licenses are compatible with each other, please refer to the GNU licenses [FAQ](https://www.gnu.org/licenses/gpl-faq.html#AllCompatibility).
