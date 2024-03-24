@@ -1,10 +1,10 @@
 # BVM library
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.6533704.svg)](https://doi.org/10.5281/zenodo.6533704)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.6533704.svg)](https://doi.org/10.5281/zenodo.6533704) (v1.0)
 
 Quantitative Information Flow assessment of vulnerability for microdata datasets using Bayes Vulnerability.
 
-DOI: [10.5281/zenodo.6533704](https://doi.org/10.5281/zenodo.6533704).
+DOI: [10.5281/zenodo.6533704](https://doi.org/10.5281/zenodo.6533704). (v1.0)
 
 This repository provides an implementation of the paper [*Flexible and scalable privacy assessment for very large datasets, with an application to official governmental microdata*](https://petsymposium.org/popets/2022/popets-2022-0114.php) (DOI: [10.56553/popets-2022-0114](https://doi.org/10.56553/popets-2022-0114), arXiv: [2204.13734](https://arxiv.org/abs/2204.13734)) that appeared in [PoPETs 2022](https://petsymposium.org/popets/2022/), and of the masters thesis [*A formal quantitative study of privacy in the publication of official educational censuses in Brazil*](https://repositorio.ufmg.br/handle/1843/38085) (DOI: [hdl:1843/38085](https://doi.org/hdl:1843/38085)). Please refer to the folder [examples](https://github.com/nunesgh/bvm-library/tree/main/examples#inep-1-experiments) for the Notebooks containing the actual results for the experiments performed.
 
