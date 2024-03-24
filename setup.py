@@ -26,7 +26,7 @@ setuptools.setup(
         url="https://github.com/nunesgh/bvm-library",
         project_urls={
             "Bug Tracker": "https://github.com/nunesgh/bvm-library/issues",
-            "Documentation": "http://nunesgh.github.io/bvm-library/",
+            "Documentation": "https://nunesgh.github.io/bvm-library/",
             "Source Code": "https://github.com/nunesgh/bvm-library",
         },
         description="Bayes Vulnerability for Microdata library",
