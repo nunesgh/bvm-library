@@ -296,13 +296,13 @@ class BVM():
             for attribute in self.sensitive_attributes:
                 variables['CA'][attribute].update(d = variables['CA'][attribute]['d']/dataset_size)
 
-                if variables['CA'][attribute]['d'] == 1:
-                    variables['CA'][attribute].update(d = variables['CA'][attribute]['d'] - 1)
-
                 values_counts = constants['sorted_dataset'].groupby(attribute).size()
                 most_probable_count = values_counts.max()
 
                 variables['CA'][attribute].update(p = variables['CA'][attribute]['p']/most_probable_count)
+
+                if (variables['CA'][attribute]['d'] == 1) and (len(values_counts) == 1):
+                    variables['CA'][attribute].update(d = variables['CA'][attribute]['d'] - 1)
 
                 d = {'QID': str(self.quasi_identifiers), 'Sensitive': attribute, 'dCA': variables['CA'][attribute]['d'],
                      'pCA': variables['CA'][attribute]['p'], 'Prior': most_probable_count/dataset_size,
