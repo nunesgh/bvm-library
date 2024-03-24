@@ -1,2 +1,9 @@
+# Jupyter
 .ipynb_checkpoints/
+
+# PyPI
+dist/
+bvmlib.egg-info/
+
+# Local development
 __pycache__/
