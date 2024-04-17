@@ -22,7 +22,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 from dataclasses import dataclass
-import numpy
+import math
 import pandas
 
 @dataclass
@@ -186,8 +186,9 @@ class BVM():
 
         if self.sensitive_attributes is not None:
             class_size = sum(variables['sensitive_values'][self.sensitive_attributes[0]].values())
-            b = round(100 * 1/class_size)
-            variables['bins']['re_id'].update({str(b): variables['bins']['re_id'][str(b)] + class_size})
+            bin_interval_rhs = math.ceil(100 * 1 / class_size)
+            bin_interval = (bin_interval_rhs - 1, bin_interval_rhs)
+            variables['bins']['re_id'][bin_interval] += class_size
 
             for attribute in self.sensitive_attributes:
                 "counts --> dict_values (dict view, not list) of counts for all possible values of attribute"
@@ -207,8 +208,9 @@ class BVM():
                     print("class_size (=" + str(class_size) + ") and counts (=" + str(sum(counts)) + ") error!\n" +
                           "QID: " + str(self.quasi_identifiers) + ". Sensitive attribute: " + attribute + ".")
 
-                b = round(100 * max_value/class_size)
-                variables['bins'][attribute].update({str(b): variables['bins'][attribute][str(b)] + class_size})
+                bin_interval_rhs = math.ceil(100 * max_value / class_size)
+                bin_interval = (bin_interval_rhs - 1, bin_interval_rhs)
+                variables['bins'][attribute][bin_interval] += class_size
 
                 variables['CA'][attribute].update(p = variables['CA'][attribute]['p'] + max_value)
                 if possible_values == 1:
@@ -224,8 +226,9 @@ class BVM():
                 variables['sensitive_values'][attribute].clear()
         else:
             class_size = eq_class_size
-            b = round(100 * 1/class_size)
-            variables['bins']['re_id'].update({str(b): variables['bins']['re_id'][str(b)] + class_size})
+            bin_interval_rhs = math.ceil(100 * 1 / class_size)
+            bin_interval = (bin_interval_rhs - 1, bin_interval_rhs)
+            variables['bins']['re_id'][bin_interval] += class_size
             if class_size == 1:
                 class_size_one = True
 
@@ -280,17 +283,34 @@ class BVM():
         else:
             variables['dCR'] = variables['dCR']/dataset_size
 
-        if self.sensitive_attributes is not None:
-            for case in self.sensitive_attributes + ['re_id']:
-                for i in range(101):
-                    variables['bins'][case].update({str(i): variables['bins'][case][str(i)]/dataset_size})
-        else:
-            for i in range(101):
-                variables['bins']['re_id'].update({str(i): variables['bins']['re_id'][str(i)]/dataset_size})
+        sensitive_attributes = (
+            self.sensitive_attributes 
+            if self.sensitive_attributes is not None 
+            else []
+        )
 
-        d = {'QID': str(self.quasi_identifiers), 'dCR': variables['dCR'], 'pCR': variables['pCR'], 'Prior': 1/dataset_size,
-             'Posterior': variables['pCR']/dataset_size, 'Histogram': str(variables['bins']['re_id'])}
-        variables['re_id'] = pandas.concat([variables['re_id'], pandas.DataFrame(data = d, index=[0])], ignore_index = True)
+        for case in [*sensitive_attributes, 're_id']:
+            variables['bins'][case] = {
+                bin_interval: count / dataset_size 
+                for bin_interval, count in variables['bins'][case].items()
+            }
+
+        df_data = {
+            'QID': str(self.quasi_identifiers),
+            'dCR': variables['dCR'], 
+            'pCR': variables['pCR'], 
+            'Prior': 1 / dataset_size, 
+            'Posterior': variables['pCR'] / dataset_size, 
+            'Histogram': variables['bins']['re_id']
+        }
+
+        df_values = [df_data.values()]
+        df_columns = list(df_data.keys())
+
+        variables['re_id'] = pandas.concat([
+            variables['re_id'],
+            pandas.DataFrame(data=df_values, columns=df_columns)
+        ], ignore_index=True)
 
         if self.sensitive_attributes is not None:
             for attribute in self.sensitive_attributes:
@@ -304,12 +324,23 @@ class BVM():
                 if (variables['CA'][attribute]['d'] == 1) and (len(values_counts) == 1):
                     variables['CA'][attribute].update(d = variables['CA'][attribute]['d'] - 1)
 
-                d = {'QID': str(self.quasi_identifiers), 'Sensitive': attribute, 'dCA': variables['CA'][attribute]['d'],
-                     'pCA': variables['CA'][attribute]['p'], 'Prior': most_probable_count/dataset_size,
-                     'Posterior': (variables['CA'][attribute]['p'] * most_probable_count)/dataset_size,
-                     'Histogram': str(variables['bins'][attribute])}
-                variables['att_inf'] = pandas.concat([variables['att_inf'], pandas.DataFrame(data = d, index=[0])],
-                                                     ignore_index = True)
+                df_data = {
+                    'QID': str(self.quasi_identifiers),
+                    'Sensitive': attribute,
+                    'dCA': variables['CA'][attribute]['d'],
+                    'pCA': variables['CA'][attribute]['p'],
+                    'Prior': most_probable_count / dataset_size,
+                    'Posterior': (variables['CA'][attribute]['p'] * most_probable_count)/dataset_size,
+                    'Histogram': variables['bins'][attribute]
+                }
+
+                df_values = [df_data.values()]
+                df_columns = list(df_data.keys())
+
+                variables['att_inf'] = pandas.concat([
+                    variables['att_inf'],
+                    pandas.DataFrame(data=df_values, columns=df_columns)
+                ], ignore_index=True)
 
                 if (self.worth_assignment is not None) and (attribute in self.worth_assignment):
                     prior_worth = {value : (count/dataset_size) * self.worth_assignment[attribute][value] for value, count in {str(v) : c for v, c in values_counts.to_dict().items()}.items() if value in self.worth_assignment[attribute]}
@@ -319,11 +350,20 @@ class BVM():
 
                     variables['CW'][attribute].update(posterior = variables['CW'][attribute]['posterior']/dataset_size)
 
-                    d = {'QID': str(self.quasi_identifiers), 'Sensitive': attribute,
-                         'Prior Worth': variables['CW'][attribute]['prior'],
-                         'Posterior Worth': variables['CW'][attribute]['posterior']}
-                    variables['information_worth'] = pandas.concat([variables['information_worth'], pandas.DataFrame(data = d, index=[0])],
-                                                                   ignore_index = True)
+                    df_data = {
+                        'QID': str(self.quasi_identifiers),
+                        'Sensitive': attribute,
+                        'Prior Worth': variables['CW'][attribute]['prior'],
+                        'Posterior Worth': variables['CW'][attribute]['posterior']
+                    }
+                    
+                    df_values = [df_data.values()]
+                    df_columns = list(df_data.keys())
+
+                    variables['information_worth'] = pandas.concat([
+                        variables['information_worth'],
+                        pandas.DataFrame(data=df_values, columns=df_columns)
+                    ], ignore_index=True)
 
         return variables
 
@@ -343,9 +383,7 @@ class BVM():
         "bins --> {'re_id':{'0%':a,'1%':b,'2%':c,...,'100%':d},'attr_1':{'0%':e,...,'100%':f},}"
         "bins: 'x%' for chance of re-identification or attribute-inference, y% for amount of rows with 'x%' chance."
         bins = {}
-        bins['re_id'] = {}
-        for i in range(101):
-            bins['re_id'].update({str(i): 0})
+        bins['re_id'] = {(i, i + 1): 0 for i in range(100)}
 
         "attributes --> self.quasi_identifiers"
         "attributes --> self.quasi_identifiers + self.sensitive_attributes"
@@ -365,9 +403,7 @@ class BVM():
             for attribute in self.sensitive_attributes:
                 sensitive_values[attribute] = {}
                 CA[attribute] = {'d': 0,'p': 0}
-                bins[attribute] = {}
-                for i in range(101):
-                    bins[attribute].update({str(i): 0})
+                bins[attribute] = {(i, i + 1): 0 for i in range(100)}
                 attributes.append(attribute)
 
             if self.worth_assignment is not None:
