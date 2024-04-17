@@ -186,8 +186,8 @@ class BVM():
 
         if self.sensitive_attributes is not None:
             class_size = sum(variables['sensitive_values'][self.sensitive_attributes[0]].values())
-            bin_interval_rhs = math.ceil(100 * 1 / class_size)
-            bin_interval = (bin_interval_rhs - 1, bin_interval_rhs)
+            bin_endpoint = math.ceil(100 * 1 / class_size)
+            bin_interval = f"({bin_endpoint - 1}, {bin_endpoint}]"
             variables['bins']['re_id'][bin_interval] += class_size
 
             for attribute in self.sensitive_attributes:
@@ -208,8 +208,8 @@ class BVM():
                     print("class_size (=" + str(class_size) + ") and counts (=" + str(sum(counts)) + ") error!\n" +
                           "QID: " + str(self.quasi_identifiers) + ". Sensitive attribute: " + attribute + ".")
 
-                bin_interval_rhs = math.ceil(100 * max_value / class_size)
-                bin_interval = (bin_interval_rhs - 1, bin_interval_rhs)
+                bin_endpoint = math.ceil(100 * max_value / class_size)
+                bin_interval = f"({bin_endpoint - 1}, {bin_endpoint}]"
                 variables['bins'][attribute][bin_interval] += class_size
 
                 variables['CA'][attribute].update(p = variables['CA'][attribute]['p'] + max_value)
@@ -226,8 +226,8 @@ class BVM():
                 variables['sensitive_values'][attribute].clear()
         else:
             class_size = eq_class_size
-            bin_interval_rhs = math.ceil(100 * 1 / class_size)
-            bin_interval = (bin_interval_rhs - 1, bin_interval_rhs)
+            bin_endpoint = math.ceil(100 * 1 / class_size)
+            bin_interval = f"({bin_endpoint - 1}, {bin_endpoint}]"
             variables['bins']['re_id'][bin_interval] += class_size
             if class_size == 1:
                 class_size_one = True
@@ -383,7 +383,7 @@ class BVM():
         "bins --> {'re_id':{'0%':a,'1%':b,'2%':c,...,'100%':d},'attr_1':{'0%':e,...,'100%':f},}"
         "bins: 'x%' for chance of re-identification or attribute-inference, y% for amount of rows with 'x%' chance."
         bins = {}
-        bins['re_id'] = {(i, i + 1): 0 for i in range(100)}
+        bins['re_id'] = {f"({i}, {i + 1}]": 0 for i in range(100)}
 
         "attributes --> self.quasi_identifiers"
         "attributes --> self.quasi_identifiers + self.sensitive_attributes"
@@ -403,7 +403,7 @@ class BVM():
             for attribute in self.sensitive_attributes:
                 sensitive_values[attribute] = {}
                 CA[attribute] = {'d': 0,'p': 0}
-                bins[attribute] = {(i, i + 1): 0 for i in range(100)}
+                bins[attribute] = {f"({i}, {i + 1}]": 0 for i in range(100)}
                 attributes.append(attribute)
 
             if self.worth_assignment is not None:
