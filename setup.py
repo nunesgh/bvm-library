@@ -17,7 +17,6 @@ def get_version(file_path):
             return line.split(delim)[1]
 
 install_requires = [
-    'numpy >= 1.24.2',
     'pandas >= 1.5.3'
 ]
 

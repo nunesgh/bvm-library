@@ -30,11 +30,6 @@ except:
     raise Exception("dataclass is required by qifprivlib.")
 
 try:
-    import numpy
-except:
-    raise Exception("numpy is required by bvmlib.")
-
-try:
     import pandas
 except:
     raise Exception("pandas is required by bvmlib.")
