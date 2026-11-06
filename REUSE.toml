@@ -1,0 +1,29 @@
+# REUSE 3.3 compliance configuration.
+#
+# This file declares licensing for files that cannot carry inline SPDX
+# headers (configuration, documentation and notebooks). The Python sources
+# carry inline headers.
+#
+# Verify compliance:    reuse lint
+#
+# See https://reuse.software/ for the full specification.
+
+version = 1
+SPDX-PackageName = "bvmlib"
+SPDX-PackageDownloadLocation = "https://github.com/nunesgh/bvm-library"
+
+[[annotations]]
+path = [
+    # Configuration.
+    ".gitignore",
+    "CITATION.cff",
+    # Documentation.
+    "README.md",
+    "examples/README.md",
+    # Notebooks, which hold the published results and are not re-saved.
+    "examples/inep-school-2014-2017.ipynb",
+    "examples/inep-school-2018.ipynb",
+    "examples/single-dataset.ipynb",
+]
+SPDX-FileCopyrightText = "2021-2026 Gabriel Henrique Lopes Gomes Alves Nunes"
+SPDX-License-Identifier = "LGPL-3.0-or-later"
