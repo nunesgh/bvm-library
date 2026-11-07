@@ -18,11 +18,7 @@ pip install bvmlib
 
 ## Usage
 
-**Warning: Please fill `NA` and `NaN` values!**
-
-A fix will be provided in a later version.
-
-Meanwhile, consider using the pandas `.fillna()` [method](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.fillna.html) before calling the `BVM()` class, e.g. when creating the pandas DataFrame, as shown below.
+From version 1.2.0, missing values (`NaN`, `None`, `pandas.NA` and `NaT`, as `pandas.isna` detects them) need not be filled: for re-identification and attribute inference, `BVM()` counts all the missing values of a quasi-identifying or sensitive attribute as one value of their own, distinct from every other value. With two or more datasets, `BVMLongitudinal()` joins the quasi-identifiers as text, so a missing value there counts as its text, such as `nan` or `None`. Earlier versions need missing values filled first, for instance with the pandas `.fillna()` [method](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.fillna.html).
 
 ### Single-dataset
 
@@ -32,7 +28,7 @@ from bvmlib.bvm import BVM
 
 # Create a pandas DataFrame for your data.
 # For instance:
-df = pandas.read_csv(file.csv).fillna(-1)
+df = pandas.read_csv('file.csv')
 
 # Create an instance.
 I = BVM(df)

@@ -28,6 +28,10 @@ from dataclasses import dataclass
 import math
 import pandas
 
+# Stands in for every missing value (pandas.isna) of an assessed column, so that they count as one
+# value of their own (GitHub issue #2). Rows are matched against it by identity.
+_MISSING = float('nan')
+
 @dataclass
 class BVM():
     "Bayes Vulnerability for Microdata class dedicated to single-dataset vulnerability assessment."
@@ -256,6 +260,17 @@ class BVM():
         "self.__compute(self, {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA}) --> ({sorted_dataset, attributes}, {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA})"
         "self.__compute(self, {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA, information_worth, CW}) --> ({sorted_dataset, attributes}, {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA, information_worth, CW})"
 
+        sorted_dataset = constants['sorted_dataset']
+        for attribute in constants['attributes']:
+            # Checked unsorted first: sorting can scatter the values in memory and slow the scan.
+            if self.dataset[attribute].isna().to_numpy().any():
+                missing = sorted_dataset[attribute].isna().to_numpy()
+                values = sorted_dataset[attribute].to_numpy(dtype=object, copy=True)
+                values[missing] = _MISSING
+                # A Series of dtype object, so that pandas keeps _MISSING as it is.
+                sorted_dataset[attribute] = pandas.Series(
+                    values, index=sorted_dataset.index, dtype=object)
+
         eq_class = ()
         eq_class_size = 0
         for row in constants['sorted_dataset'][constants['attributes']].itertuples(index=False):
@@ -268,10 +283,12 @@ class BVM():
                 it = 0
                 for attribute in self.sensitive_attributes:
                     value = row[len(self.quasi_identifiers)+it]
-                    if str(value) in variables['sensitive_values'][attribute]:
-                        variables['sensitive_values'][attribute].update({str(value): variables['sensitive_values'][attribute][str(value)] + 1})
+                    # Not str(_MISSING), which would merge it with the text 'nan'.
+                    key = value if value is _MISSING else str(value)
+                    if key in variables['sensitive_values'][attribute]:
+                        variables['sensitive_values'][attribute][key] += 1
                     else:
-                        variables['sensitive_values'][attribute].update({str(value): 1})
+                        variables['sensitive_values'][attribute][key] = 1
                     it += 1
             else:
                 eq_class_size += 1
@@ -319,7 +336,7 @@ class BVM():
             for attribute in self.sensitive_attributes:
                 variables['CA'][attribute].update(d = variables['CA'][attribute]['d']/dataset_size)
 
-                values_counts = constants['sorted_dataset'].groupby(attribute).size()
+                values_counts = constants['sorted_dataset'].groupby(attribute, dropna=False).size()
                 most_probable_count = values_counts.max()
 
                 variables['CA'][attribute].update(p = variables['CA'][attribute]['p']/most_probable_count)
