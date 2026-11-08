@@ -16,6 +16,7 @@ import pytest
 from bvmlib.bvm import BVM, BVMLongitudinal
 
 NAN = float("nan")
+INF = float("inf")
 NA = pandas.NA
 
 LABELS = ["(" + str(k - 1) + ", " + str(k) + "]" for k in range(1, 101)]
@@ -221,11 +222,63 @@ def test_worth_rejects_a_worth_that_is_not_a_number(worth):
         bvm.worth("s", {"a": 1, "b": worth})
 
 
+@pytest.mark.parametrize("worth", [NAN, INF, pandas.Series([NAN]).iloc[0],
+                                   pandas.Series([INF]).iloc[0]],
+                         ids=["nan", "inf", "numpy_nan", "numpy_inf"])
+def test_worth_rejects_a_worth_that_is_not_finite(worth):
+    bvm = BVM(TABLE)
+    bvm.sensitive(["s"])
+    with pytest.raises(ValueError, match=exactly("Worth assignments must be finite.")):
+        bvm.worth("s", {"a": 1, "b": worth})
+
+
+def test_worth_rejects_minus_infinity_as_negative():
+    bvm = BVM(TABLE)
+    bvm.sensitive(["s"])
+    with pytest.raises(ValueError, match=exactly("Worth assignment cannot be negative!")):
+        bvm.worth("s", {"a": 1, "b": -INF})
+
+
+@pytest.mark.parametrize("key", [1, 1.0, NAN, NA, True, ("a",), b"a"], ids=repr)
+def test_worth_rejects_a_key_that_is_neither_a_string_nor_none(key):
+    bvm = BVM(TABLE)
+    bvm.sensitive(["s"])
+    message = "Worth assignment keys must be strings, or None for missing values."
+    with pytest.raises(TypeError, match=exactly(message)):
+        bvm.worth("s", {"a": 1, key: 2})
+
+
+def test_worth_accepts_keys_of_a_subclass_of_str():
+    # numpy's strings, as read from an array of text: the worths of test_prior_and_posterior_worth,
+    # with the same results.
+    keys = list(pandas.Series(["a", "b", "c"]).to_numpy(dtype=str))
+    # Guard: each key is a str, but not of type str itself.
+    assert all(isinstance(key, str) and type(key) is not str for key in keys)
+    worths = dict(zip(keys, [1, 3, 2]))
+    expect_worth(assess(TABLE, ["q"], ["s"], {"s": worths}), "s", prior=1, posterior=7 / 6)
+
+
+def test_worth_keeps_its_own_copy_of_the_assignment():
+    bvm = BVM(TABLE)
+    bvm.qids(["q"])
+    bvm.sensitive(["s"])
+    assignment = {"b": 3}
+    bvm.worth("s", assignment)
+    # Later changes to the caller's dictionary, one of which worth() would refuse.
+    assignment["a"] = 100
+    assignment["b"] = -1
+    # As for {"b": 3} alone. Prior: 2/6 * 3 = 1. Posterior: (1 * 3 + 1 * 3) / 6 = 1.
+    expect_worth(bvm.assess(), "s", prior=1, posterior=1)
+
+
 @pytest.mark.parametrize("assignment, error", [
     ({"a": "2"}, TypeError),
     ({"a": 2, None: None}, TypeError),
+    ({"a": 2, 1: 2}, TypeError),
     ({"a": 2, "b": -1}, ValueError),
-], ids=["text", "none", "negative"])
+    ({"a": 2, "b": NAN}, ValueError),
+    ({"a": 2, "b": INF}, ValueError),
+], ids=["text", "none", "key", "negative", "nan", "inf"])
 def test_a_rejected_worth_call_keeps_the_earlier_assignment(assignment, error):
     bvm = BVM(TABLE)
     bvm.qids(["q"])

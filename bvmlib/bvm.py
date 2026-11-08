@@ -124,7 +124,9 @@ class BVM():
         "self.worth('sensitive_attribute', {'val_1':worth_1,'val_2':worth_2,})"
         "Each value is matched by its text, str(value); missing values by the key None."
         "Raises TypeError unless given a string and a dictionary, or for a worth not a number."
+        "Raises TypeError for a key that is neither a string nor None."
         "Raises ValueError for an undefined sensitive attribute or a negative worth."
+        "Raises ValueError for an infinite or NaN worth."
 
         # Must be run once for each sensitive attribute.
 
@@ -136,15 +138,20 @@ class BVM():
             raise ValueError(f"{sensitive_attribute} is not a defined sensitive attribute.")
         elif type(worth_assignment) is not dict:
             raise TypeError("A string and a dictionary must be provided.")
+        elif not all(isinstance(value, str) or value is None for value in worth_assignment):
+            raise TypeError("Worth assignment keys must be strings, or None for missing values.")
         elif not all(isinstance(worth, numbers.Real) for worth in worth_assignment.values()):
             raise TypeError("Worth assignments must be numbers.")
 
         if any([True if worth < 0 else False for value, worth in worth_assignment.items()]):
             raise ValueError("Worth assignment cannot be negative!")
+        elif not all(math.isfinite(worth) for worth in worth_assignment.values()):
+            raise ValueError("Worth assignments must be finite.")
 
         if self.worth_assignment is None:
             self.worth_assignment = {}
-        self.worth_assignment[sensitive_attribute] = worth_assignment
+        # A copy, so that a later change to the caller's dictionary cannot bypass the checks above.
+        self.worth_assignment[sensitive_attribute] = worth_assignment.copy()
 
     def assess(self):
         "self.assess()"
@@ -456,8 +463,9 @@ class BVMLongitudinal(BVM):
         "Raises ValueError for an empty dataset or identifier, or an identifier not in its dataset."
         "Raises ValueError for a list of several identifiers for one dataset."
 
-        message = ("A non-empty list of pandas DataFrames and a non-empty list of strings for the "
-                   "identifying attributes, both with the same length, must be provided.")
+        message = ("A non-empty list of pandas DataFrames and a non-empty list of identifying "
+                   "attributes, each a string or a list holding one string, both with the same "
+                   "length, must be provided.")
         if (type(datasets) is not list or type(identifiers) is not list
                 or len(datasets) != len(identifiers)):
             raise TypeError(message)
@@ -506,17 +514,28 @@ class BVMLongitudinal(BVM):
         "If all attributes have the same label on all datasets, only one list of quasi-identifiers can be provided."
         "Raises TypeError for an argument or entry of the wrong type."
         "Raises ValueError for a quasi-identifier that is not an attribute of its dataset."
+        "Raises ValueError for an empty list, or lists of unequal lengths."
+        "Raises ValueError unless a list of lists holds one list for each dataset."
 
         types = "A list of strings or a list of lists of strings must be provided."
+        lists = ("A non-empty list of quasi-identifiers for each dataset, all with the same "
+                 "length, must be provided.")
         not_found = " is not a string or is not an attribute of the respective dataset."
         if type(quasi_identifiers) is not list:
             raise TypeError(types)
-        # If quasi_identifiers[0] is a list, all other entries must also be.
+        elif len(quasi_identifiers) == 0:
+            raise ValueError(lists)
+        # If quasi_identifiers[0] is a list, all other entries must also be, one for each dataset,
+        # all as long as the first, which cannot be empty.
         if type(quasi_identifiers[0]) is list:
+            if len(quasi_identifiers) != len(self.datasets) or len(quasi_identifiers[0]) == 0:
+                raise ValueError(lists)
             i = 0
             for qid_list in quasi_identifiers:
                 if type(qid_list) is not list:
                     raise TypeError(types)
+                elif len(qid_list) != len(quasi_identifiers[0]):
+                    raise ValueError(lists)
                 for qid in qid_list:
                     if type(qid) is not str:
                         raise TypeError(f"{qid}{not_found}")
@@ -533,8 +552,13 @@ class BVMLongitudinal(BVM):
                         raise ValueError(f"{qid}{not_found}")
             # The same list for every dataset.
             quasi_identifiers = [quasi_identifiers] * len(self.datasets)
+        else:
+            raise TypeError(types)
 
-        self.quasi_identifiers = quasi_identifiers
+        # The join reads every dataset's list; the methods of BVM read the focal dataset's, which
+        # names the joined columns.
+        self.all_quasi_identifiers = quasi_identifiers
+        self.quasi_identifiers = quasi_identifiers[0]
 
     def sensitive(self, sensitive_attributes):
         "self.sensitive(['sensitive_attribute_1','sensitive_attribute_2',])"
@@ -585,13 +609,13 @@ class BVMLongitudinal(BVM):
         # them, in order, joined by '#'. A row absent from a later dataset reads _JOINED_ABSENT.
 
         identifier = self.identifiers[0]
-        quasi_identifiers = self.quasi_identifiers[0]
+        quasi_identifiers = self.quasi_identifiers
         joined_dataset = self.datasets[0]
 
         for i in range(1, len(self.datasets)):
             # Only the identifier and the quasi-identifiers, renamed as in the focal dataset, so
             # that no other column of a later dataset is merged.
-            columns = [self.identifiers[i]] + self.quasi_identifiers[i]
+            columns = [self.identifiers[i]] + self.all_quasi_identifiers[i]
             temp = self.datasets[i][columns].set_axis([identifier] + quasi_identifiers, axis=1)
             for column in quasi_identifiers:
                 temp[column] = _joined_text(temp[column])
@@ -611,5 +635,3 @@ class BVMLongitudinal(BVM):
                 joined_dataset[column] = earlier + '#' + later
 
         self.dataset = joined_dataset
-        self.all_quasi_identifiers = self.quasi_identifiers
-        self.quasi_identifiers = self.quasi_identifiers[0]

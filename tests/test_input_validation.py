@@ -14,9 +14,12 @@ from bvmlib.bvm import BVM, BVMLongitudinal
 STRINGS = "A list of strings must be provided."
 STRING_AND_DICT = "A string and a dictionary must be provided."
 NO_QIDS = "One or more quasi-identifiers must be assigned."
-DATASETS = ("A non-empty list of pandas DataFrames and a non-empty list of strings for the "
-            "identifying attributes, both with the same length, must be provided.")
+DATASETS = ("A non-empty list of pandas DataFrames and a non-empty list of identifying "
+            "attributes, each a string or a list holding one string, both with the same "
+            "length, must be provided.")
 QID_LISTS = "A list of strings or a list of lists of strings must be provided."
+LIST_PER_DATASET = ("A non-empty list of quasi-identifiers for each dataset, all with the same "
+                    "length, must be provided.")
 NOT_FOUND = " is not a string or is not an attribute of the respective dataset."
 
 SETTERS = ["ids", "qids", "sensitive"]
@@ -78,11 +81,11 @@ def test_setters_reject_a_name_that_is_not_an_attribute(setter):
         getattr(BVM(table()), setter)(["a", "b"])
 
 
-
 @pytest.mark.parametrize("names", [["s", "s"], ["s", "a", "s"]])
 def test_sensitive_rejects_a_name_listed_twice(names):
     with pytest.raises(ValueError, match=exactly("s is listed more than once.")):
         BVM(table()).sensitive(names)
+
 
 def test_a_rejected_call_keeps_the_earlier_quasi_identifiers():
     bvm = BVM(table())
@@ -219,6 +222,44 @@ def test_longitudinal_qids_reject_a_name_that_is_not_an_attribute_of_its_dataset
         longitudinal().qids([["a"], ["a"]])
 
 
+@pytest.mark.parametrize("names", [[1], [1, "a"], [None], [("a",)]], ids=repr)
+def test_longitudinal_qids_reject_a_first_entry_that_is_neither_a_list_nor_a_string(names):
+    with pytest.raises(TypeError, match=exactly(QID_LISTS)):
+        longitudinal().qids(names)
+
+
+@pytest.mark.parametrize("names", [[], [[], []], [[], ["b"]]], ids=repr)
+def test_longitudinal_qids_reject_an_empty_list(names):
+    with pytest.raises(ValueError, match=exactly(LIST_PER_DATASET)):
+        longitudinal().qids(names)
+
+
+@pytest.mark.parametrize("names", [[["a"]], [["a"], ["b"], ["b"]], [["a"], ["b"], []]], ids=repr)
+def test_longitudinal_qids_reject_a_number_of_lists_other_than_of_datasets(names):
+    # Two datasets, so two lists.
+    with pytest.raises(ValueError, match=exactly(LIST_PER_DATASET)):
+        longitudinal().qids(names)
+
+
+@pytest.mark.parametrize("names", [[["a", "s"], ["b"]], [["a"], ["b", "t"]], [["a"], []]],
+                         ids=repr)
+def test_longitudinal_qids_reject_lists_of_unequal_lengths(names):
+    with pytest.raises(ValueError, match=exactly(LIST_PER_DATASET)):
+        longitudinal().qids(names)
+
+
+def test_a_rejected_call_keeps_the_earlier_longitudinal_quasi_identifiers():
+    bvm = longitudinal()
+    bvm.qids([["a"], ["b"]])
+    with pytest.raises(ValueError):
+        bvm.qids([["a", "s"], ["b"]])
+    # On a and b, the classes are (1, 3) and (2, 4): each row is alone in its class.
+    row = bvm.assess()["re_id"].iloc[0]
+    assert row["QID"] == "['a']"
+    assert row["pCR"] == 2
+    assert row["dCR"] == pytest.approx(1.0)
+
+
 @pytest.mark.parametrize("names", ["s", ("s",), None])
 def test_longitudinal_sensitive_rejects_an_argument_that_is_not_a_list(names):
     with pytest.raises(TypeError, match=exactly(STRINGS)):
@@ -237,7 +278,6 @@ def test_longitudinal_sensitive_rejects_a_name_not_in_the_focal_dataset():
         longitudinal().sensitive(["t"])
 
 
-
 def test_longitudinal_sensitive_rejects_a_name_listed_twice():
     with pytest.raises(ValueError, match=exactly("s is listed more than once.")):
         longitudinal().sensitive(["s", "s"])
@@ -247,6 +287,7 @@ def test_longitudinal_ids_reports_each_identifier(capsys):
     longitudinal().ids()
     assert capsys.readouterr().out == ("Identifying attribute for dataset 1: id.\n"
                                        "Identifying attribute for dataset 2: key.\n")
+
 
 def test_longitudinal_assess_needs_quasi_identifiers():
     with pytest.raises(ValueError, match=exactly(NO_QIDS)):

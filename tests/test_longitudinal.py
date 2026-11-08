@@ -20,8 +20,9 @@ NAN = float("nan")
 
 LABELS = ["(" + str(k - 1) + ", " + str(k) + "]" for k in range(1, 101)]
 
-DATASETS = ("A non-empty list of pandas DataFrames and a non-empty list of strings for the "
-            "identifying attributes, both with the same length, must be provided.")
+DATASETS = ("A non-empty list of pandas DataFrames and a non-empty list of identifying "
+            "attributes, each a string or a list holding one string, both with the same "
+            "length, must be provided.")
 NOT_FOUND = " is not a string or is not an attribute of the respective dataset."
 
 
@@ -239,13 +240,13 @@ def test_missing_values_and_absent_rows_are_apart_from_any_text():
     expect_re_id(results, dCR=1, pCR=4, rows=4, bins={"(99, 100]": 1})
 
 
-
 def test_missing_values_and_absent_rows_are_apart_from_the_texts_missing_and_absent():
     # ("missing", z) id 1, (missing, z) id 2, (y, "absent") id 3, (y, absent) id 4, all apart.
     first = pandas.DataFrame({"id": [1, 2, 3, 4], "q": text(["missing", NAN, "y", "y"])})
     second = pandas.DataFrame({"id": [1, 2, 3], "q": ["z", "z", "absent"]})
     results = assess([first, second], ["id", "id"], [["q"], ["q"]])
     expect_re_id(results, dCR=1, pCR=4, rows=4, bins={"(99, 100]": 1})
+
 
 def test_values_holding_a_hash_never_join_into_the_same_value():
     # Classes: ("a#b", "c") ids 1 and 5, ("a", "b#c") id 2, ("a\", "#b") id 3, ("a\#", "b") id 4.
@@ -450,3 +451,51 @@ def test_the_notebooks_call_shape(years):
     # Guard: assess() leaves the caller's datasets as they were.
     for dataset, copy in zip(datasets, copies):
         pandas.testing.assert_frame_equal(dataset, copy)
+
+
+# Assessing more than once.
+
+
+@pytest.mark.parametrize("datasets, identifiers, qids", [
+    ([FOCAL], ["id"], [["q"]]),
+    ([FOCAL], [["id"]], ["q"]),
+    ([FOCAL, SECOND, THIRD], ["id", "key", "code"], [["q"], ["r"], ["t"]]),
+    ([SAME_FIRST, SAME_SECOND], ["id", "id"], ["q", "r"]),
+], ids=["one_dataset", "one_dataset_flat", "three_datasets", "two_datasets_flat"])
+def test_a_second_assessment_gives_the_same_results(datasets, identifiers, qids):
+    bvm = BVMLongitudinal(datasets, identifiers)
+    bvm.qids(qids)
+    bvm.sensitive(["s"])
+    bvm.worth("s", {"a": 1, "b": 2})
+    first = bvm.assess()
+    expect_same_results(bvm.assess(), first)
+
+
+def test_each_assessment_of_three_datasets():
+    # As in test_three_datasets_with_other_names. Worth: Prior max(3/4 * 1, 1/4 * 2) = 3/4,
+    # Posterior (max(1 * 1, 1 * 2) + 1 + 1) / 4 = 1.
+    bvm = BVMLongitudinal([FOCAL, SECOND, THIRD], ["id", "key", "code"])
+    bvm.qids([["q"], ["r"], ["t"]])
+    bvm.sensitive(["s"])
+    bvm.worth("s", {"a": 1, "b": 2})
+    bins = {"(49, 50]": 2 / 4, "(99, 100]": 2 / 4}
+    for _ in range(2):
+        results = bvm.assess()
+        expect_re_id(results, dCR=2 / 4, pCR=3, rows=4, bins=bins)
+        expect_att_inf(results, "s", dCA=2 / 4, pCA=1, prior=3 / 4, posterior=3 / 4, bins=bins)
+        row = results["information_worth"].iloc[0]
+        assert row["Prior Worth"] == pytest.approx(3 / 4)
+        assert row["Posterior Worth"] == pytest.approx(1)
+
+
+def test_quasi_identifiers_set_again_after_an_assessment():
+    # First q and r, as in test_a_flat_list_of_quasi_identifiers; then q alone, whose classes are
+    # (1, 9) ids 1 and 2, (2, 9) ids 3 and 4.
+    bvm = BVMLongitudinal([SAME_FIRST, SAME_SECOND], ["id", "id"])
+    bvm.qids(["q", "r"])
+    bins = {"(99, 100]": 2 / 4, "(49, 50]": 2 / 4}
+    expect_re_id(bvm.assess(), dCR=2 / 4, pCR=3, rows=4, bins=bins)
+    bvm.qids([["q"], ["q"]])
+    results = bvm.assess()
+    expect_re_id(results, dCR=0, pCR=2, rows=4, bins={"(49, 50]": 1})
+    assert results["re_id"].iloc[0]["QID"] == "['q']"
