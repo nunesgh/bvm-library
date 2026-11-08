@@ -26,6 +26,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from dataclasses import dataclass
 import math
+import numbers
 import pandas
 
 # Stands in for every missing value (pandas.isna) of an assessed column, so that they count as one
@@ -106,7 +107,8 @@ class BVM():
 
     def worth(self, sensitive_attribute, worth_assignment):
         "self.worth('sensitive_attribute', {'val_1':worth_1,'val_2':worth_2,})"
-        "Raises TypeError unless given a string and a dictionary."
+        "Each value is matched by its text, str(value); missing values by the key None."
+        "Raises TypeError unless given a string and a dictionary, or for a worth not a number."
         "Raises ValueError for an undefined sensitive attribute or a negative worth."
 
         # Must be run once for each sensitive attribute.
@@ -119,6 +121,8 @@ class BVM():
             raise ValueError(f"{sensitive_attribute} is not a defined sensitive attribute.")
         elif type(worth_assignment) is not dict:
             raise TypeError("A string and a dictionary must be provided.")
+        elif not all(isinstance(worth, numbers.Real) for worth in worth_assignment.values()):
+            raise TypeError("Worth assignments must be numbers.")
 
         if any([True if worth < 0 else False for value, worth in worth_assignment.items()]):
             raise ValueError("Worth assignment cannot be negative!")
@@ -188,7 +192,10 @@ class BVM():
                         class_size_one = True
 
                 if (self.worth_assignment is not None) and (attribute in self.worth_assignment):
-                    partition_worth = {value : count * self.worth_assignment[attribute][value] for value, count in {str(v) : c for v, c in variables['sensitive_values'][attribute].items()}.items() if value in self.worth_assignment[attribute]}
+                    partition_worth = {
+                        value : count * self.worth_assignment[attribute][value]
+                        for value, count in variables['sensitive_values'][attribute].items()
+                        if value in self.worth_assignment[attribute]}
                     if len(partition_worth) > 0:
                         variables['CW'][attribute].update(posterior = variables['CW'][attribute]['posterior'] + max(partition_worth.values()))
 
@@ -250,8 +257,8 @@ class BVM():
                 it = 0
                 for attribute in self.sensitive_attributes:
                     value = row[len(self.quasi_identifiers)+it]
-                    # Not str(_MISSING), which would merge it with the text 'nan'.
-                    key = value if value is _MISSING else str(value)
+                    # Missing values count under None, as worth() keys them, apart from every text.
+                    key = None if value is _MISSING else str(value)
                     if key in variables['sensitive_values'][attribute]:
                         variables['sensitive_values'][attribute][key] += 1
                     else:
@@ -324,7 +331,7 @@ class BVM():
                 if (self.worth_assignment is not None) and (attribute in self.worth_assignment):
                     prior_worth = {
                         value : (count/dataset_size) * self.worth_assignment[attribute][value]
-                        for value, count in {str(v) : c for v, c in values_counts.items()}.items()
+                        for value, count in values_counts.items()
                         if value in self.worth_assignment[attribute]}
 
                     if len(prior_worth) > 0:
@@ -455,6 +462,7 @@ class BVMLongitudinal(BVM):
         self.quasi_identifiers = None
         self.all_quasi_identifiers = None
         self.sensitive_attributes = None
+        self.worth_assignment = None
 
 ##### Public methods for longitudinal attacks.
 
