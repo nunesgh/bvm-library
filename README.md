@@ -18,7 +18,9 @@ pip install bvmlib
 
 ## Usage
 
-From version 1.2.0, missing values (`NaN`, `None`, `pandas.NA` and `NaT`, as `pandas.isna` detects them) need not be filled: for re-identification and attribute inference, `BVM()` counts all the missing values of a quasi-identifying or sensitive attribute as one value of their own, distinct from every other value. With two or more datasets, `BVMLongitudinal()` joins the quasi-identifiers as text, so a missing value there counts as its text, such as `nan` or `None`. Earlier versions need missing values filled first, for instance with the pandas `.fillna()` [method](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.fillna.html).
+From version 1.2.0, missing values (`NaN`, `None`, `pandas.NA` and `NaT`, as `pandas.isna` detects them) need not be filled: for re-identification and attribute inference, `BVM()` counts all the missing values of a quasi-identifying or sensitive attribute as one value of their own, distinct from every other value. With two or more datasets, `BVMLongitudinal()` joins the quasi-identifiers of all the datasets, and in the join a missing value and a row absent from a later dataset count as two values of their own, distinct from each other and from every real value, such as the text `nan` or `None`. Earlier versions need missing values filled first, for instance with the pandas `.fillna()` [method](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.fillna.html).
+
+From version 1.2.0, `BVM()`, `BVMLongitudinal()` and their methods check their arguments and raise `TypeError` or `ValueError`, with a message saying what is wrong, for instance for an attribute that is not in the dataset. Earlier versions print the message instead.
 
 ### Single-dataset
 
@@ -49,9 +51,11 @@ print(I_results['re_id'])
 print(I_results['att_inf'])
 ```
 
+Optionally, after `I.sensitive()`, `I.worth('attribute_3', {'a': 1, 'b': 2, None: 0.5})` assigns worths to values of the sensitive attribute `attribute_3` (one call for each attribute to weigh), and `I.assess()` then also returns `I_results['information_worth']`, with the **Prior Worth** and **Posterior Worth** of each attribute given worths. Values are matched by their text, `str(value)`, so a column of floats needs keys such as `'1.0'`, and a value with no key has no worth. From version 1.2.0, missing values are matched by the key `None`, a key that is neither a string nor `None` raises `TypeError`, and each worth must be a finite number, zero or more.
+
 ### Additional examples
 
-Please refer to the folder [examples](https://github.com/nunesgh/bvm-library/blob/main/examples) for additional usage examples, including attacks on longitudinal collections of datasets.
+Please refer to the folder [examples](https://github.com/nunesgh/bvm-library/blob/main/examples) for additional usage examples, including attacks on longitudinal collections of datasets. For those, `BVMLongitudinal()` takes one identifying attribute for each dataset, as a string or, from version 1.2.0, as a list holding one string, which is how the `inep-school-2014-2017` example gives them.
 
 ### Note on the results
 
@@ -69,11 +73,18 @@ For privacy assessment of Collective (sensitive) Attribute-inference (**CAS** / 
 - **Posterior**: corresponds to the adversary's posterior knowledge in a probabilistic attack;
 - **Histogram**: corresponds to the distribution of individuals according to the chance of attribute-inference.
 
+From version 1.2.0, each **Histogram** is a dict of 100 bins, `'(0, 1]'` to `'(99, 100]'`: a row whose chance of re-identification, or of attribute-inference, is the probability p falls in the bin `(k - 1, k]` with k = ceil(100p), and each bin holds the fraction of all the rows that fall in it. Earlier versions give it as the text of a dict of 101 bins, `'0'` to `'100'`. `assess()` also returns these bins in `I_results['bins']`: re-identification's under `'re_id'`, and each sensitive attribute's under its name, except that a sensitive attribute named `re_id` takes `'re_id (sensitive)'`, with `' (sensitive)'` added again while another sensitive attribute has that name.
+
 ## Contributing
 
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 
-Please make sure to update tests as appropriate.
+Please make sure to update tests as appropriate. The tests are in the folder `tests`. To run them, install pandas and [pytest](https://docs.pytest.org/), then run `pytest` from the repository root, which needs no installation of `bvmlib`:
+
+```bash
+pip install pandas pytest
+pytest
+```
 
 ## License
 

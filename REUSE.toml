@@ -20,9 +20,10 @@ path = [
     # Documentation.
     "README.md",
     "examples/README.md",
-    # Notebooks, which hold the published results and are not re-saved.
+    # The INEP notebooks, which hold the published results and are not re-saved.
     "examples/inep-school-2014-2017.ipynb",
     "examples/inep-school-2018.ipynb",
+    # The example notebook.
     "examples/single-dataset.ipynb",
 ]
 SPDX-FileCopyrightText = "2021-2026 Gabriel Henrique Lopes Gomes Alves Nunes"
