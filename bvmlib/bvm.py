@@ -37,6 +37,21 @@ _MISSING = float('nan')
 # string, so no sensitive attribute shares it, whatever its name.
 _RE_ID = None
 
+# The longitudinal join's text for a missing value and for a row absent from a later dataset. The
+# join writes every other value as its text with each '\' and '#' escaped by '\', so that no value
+# reads as either of them, and no two lists of values joined by '#' give the same text.
+_JOINED_MISSING = '\\missing'
+_JOINED_ABSENT = '\\absent'
+
+def _joined_text(column):
+    "The text of each value of column for the longitudinal join, as a Series of strings."
+
+    missing = column.isna().to_numpy()
+    values = column.to_numpy(dtype=object)
+    return pandas.Series(
+        [_JOINED_MISSING if is_missing else str(value).replace('\\', '\\\\').replace('#', '\\#')
+         for value, is_missing in zip(values, missing)], index=column.index)
+
 @dataclass
 class BVM():
     "Bayes Vulnerability for Microdata class dedicated to single-dataset vulnerability assessment."
@@ -435,20 +450,30 @@ class BVMLongitudinal(BVM):
     def __init__(self, datasets, identifiers):
         "BVM.longitudinal([pandas.DataFrame_1, pandas.DataFrame_2,], [identifier_1, identifier_2,]): Initializes BVM class for longitudinal attacks linked by unique identifier attributes."
         "identifier_1 is the unique identifier attribute for dataset pandas.DataFrame_1."
+        "Each identifier is a string, or a list holding exactly one string."
         "pandas.DataFrame_1 is considered to be the focal dataset."
         "Raises TypeError for an argument or entry of the wrong type, or lists of unequal lengths."
         "Raises ValueError for an empty dataset or identifier, or an identifier not in its dataset."
+        "Raises ValueError for a list of several identifiers for one dataset."
 
         message = ("A non-empty list of pandas DataFrames and a non-empty list of strings for the "
                    "identifying attributes, both with the same length, must be provided.")
         if (type(datasets) is not list or type(identifiers) is not list
                 or len(datasets) != len(identifiers)):
             raise TypeError(message)
+        # A list holding exactly one string stands for that string.
+        identifiers = [
+            identifier[0] if type(identifier) is list and len(identifier) == 1 else identifier
+            for identifier in identifiers]
         for i in range(len(datasets)):
             if type(datasets[i]) is not pandas.DataFrame:
                 raise TypeError(message)
             elif datasets[i].empty:
                 raise ValueError(message)
+            elif (type(identifiers[i]) is list and len(identifiers[i]) > 1
+                    and all(type(identifier) is str for identifier in identifiers[i])):
+                raise ValueError(f"{identifiers[i]} lists several identifying attributes: each "
+                                 "dataset is linked by one, a string or a list holding one string.")
             elif type(identifiers[i]) is not str:
                 raise TypeError(message)
             elif identifiers[i] == "":
@@ -501,13 +526,13 @@ class BVMLongitudinal(BVM):
         # If quasi_identifiers[0] is a string, all other entries must also be.
         elif type(quasi_identifiers[0]) is str:
             for qid in quasi_identifiers:
-                i = 0
                 if type(qid) is not str:
                     raise TypeError(f"{qid}{not_found}")
                 for dataset in self.datasets:
-                    if qid not in dataset[i].columns:
+                    if qid not in dataset.columns:
                         raise ValueError(f"{qid}{not_found}")
-                    i = i + 1
+            # The same list for every dataset.
+            quasi_identifiers = [quasi_identifiers] * len(self.datasets)
 
         self.quasi_identifiers = quasi_identifiers
 
@@ -531,6 +556,8 @@ class BVMLongitudinal(BVM):
 
     def assess(self):
         "self.assess()"
+        "With two or more datasets, the later ones are left-joined onto the focal one."
+        "A missing value and a row absent from a later dataset are two values of their own there."
         "Raises ValueError without quasi-identifiers, RuntimeError if an internal check fails."
         # Makes use of __setup(self), __compute(self, constants, variables), and __update_eq_class(self, variables, eq_class, eq_class_size, row) from parent class BVM().
 
@@ -554,22 +581,34 @@ class BVMLongitudinal(BVM):
 
     def __leftouterjoin(self):
         "self.__leftouterjoin()"
+        # With two or more datasets, each quasi-identifier becomes the text of its values in all of
+        # them, in order, joined by '#'. A row absent from a later dataset reads _JOINED_ABSENT.
 
+        identifier = self.identifiers[0]
+        quasi_identifiers = self.quasi_identifiers[0]
         joined_dataset = self.datasets[0]
 
-        default_columns = [self.identifiers[0]] + self.quasi_identifiers[0]
-        if self.sensitive_attributes is not None:
-            default_columns.extend(self.sensitive_attributes[0])
-
-        i = 1
-        for dataset in self.datasets[1:]:
+        for i in range(1, len(self.datasets)):
+            # Only the identifier and the quasi-identifiers, renamed as in the focal dataset, so
+            # that no other column of a later dataset is merged.
             columns = [self.identifiers[i]] + self.quasi_identifiers[i]
-            temp = dataset.rename(columns=dict(zip(columns, default_columns)))
+            temp = self.datasets[i][columns].set_axis([identifier] + quasi_identifiers, axis=1)
+            for column in quasi_identifiers:
+                temp[column] = _joined_text(temp[column])
 
-            joined_dataset = pandas.merge(joined_dataset, temp, how='left', on=self.identifiers[0])
-            for column in default_columns[1:len(self.quasi_identifiers[0])+1]:
-                joined_dataset[column] = joined_dataset[column+"_x"].map(str) + "#" + joined_dataset[column+"_y"].map(str)
-                joined_dataset = joined_dataset.drop(columns=[column+"_x", column+"_y"])
+            # The merge suffixes the later quasi-identifiers so that they name no joined column.
+            suffix = '#'
+            while any(column + suffix in joined_dataset.columns for column in quasi_identifiers):
+                suffix += '#'
+            joined_dataset = pandas.merge(
+                joined_dataset, temp, how='left', on=identifier, suffixes=(None, suffix))
+            for column in quasi_identifiers:
+                earlier = joined_dataset[column]
+                if i == 1:
+                    # The focal dataset's own values, not yet written as text.
+                    earlier = _joined_text(earlier)
+                later = joined_dataset.pop(column + suffix).fillna(_JOINED_ABSENT)
+                joined_dataset[column] = earlier + '#' + later
 
         self.dataset = joined_dataset
         self.all_quasi_identifiers = self.quasi_identifiers

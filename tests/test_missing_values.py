@@ -374,11 +374,10 @@ def test_guard_input_table_is_not_modified():
     assert [repr(value) for value in frame["text"]] == ["None", "'a'", "nan", "'a'"]
 
 
-def test_guard_longitudinal_join_writes_missing_values_as_text():
-    # Guard. The join writes each quasi-identifier as the text "<first>#<second>", where a
-    # missing value and an unmatched row both read "nan".
-    # Classes: "1.0#nan" ids 1 and 3, "nan#3.0" id 2, "2.0#nan" id 4 (not in the second table).
-    first = pandas.DataFrame({"id": [1, 2, 3, 4], "q": [1.0, NAN, 1.0, 2.0]})
+def test_longitudinal_join_keeps_missing_values_apart_from_absent_rows():
+    # In the join, a missing value and a row absent from the second table are two values.
+    # Classes: (1.0, missing) ids 1 and 3, (missing, 3.0) id 2, (1.0, absent) id 4.
+    first = pandas.DataFrame({"id": [1, 2, 3, 4], "q": [1.0, NAN, 1.0, 1.0]})
     second = pandas.DataFrame({"id": [1, 2, 3, 5], "q": [NAN, 3.0, NAN, 2.0]})
     longitudinal = BVMLongitudinal([first, second], ["id", "id"])
     longitudinal.qids([["q"], ["q"]])
