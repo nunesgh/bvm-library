@@ -27,7 +27,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 try:
     from dataclasses import dataclass
 except:
-    raise Exception("dataclass is required by qifprivlib.")
+    raise Exception("dataclass is required by bvmlib.")
 
 try:
     import pandas

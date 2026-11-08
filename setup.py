@@ -32,6 +32,7 @@ setuptools.setup(
             "Source Code": "https://github.com/nunesgh/bvm-library",
         },
         description="Bayes Vulnerability for Microdata library",
+        license="LGPL-3.0-or-later",
         long_description=read("README.md"),
         long_description_content_type='text/markdown',
         packages=setuptools.find_packages(),

@@ -40,135 +40,95 @@ class BVM():
 
     def __init__(self, dataset):
         "BVM(pandas.DataFrame): Initializes BVM class for single-dataset attacks."
+        "Raises TypeError if dataset is not a pandas DataFrame, ValueError if it is empty."
 
-        try:
-            if type(dataset) is not pandas.DataFrame:
-                raise TypeError
-            if dataset.empty:
-                raise ValueError(dataset)
+        if type(dataset) is not pandas.DataFrame:
+            raise TypeError("The dataset must be a pandas DataFrame.")
+        if dataset.empty:
+            raise ValueError("The dataset cannot be empty.")
 
-        except TypeError:
-            print("The dataset must be a pandas DataFrame.")
-        except ValueError:
-            print("The dataset cannot be empty.")
-
-        else:
-            self.dataset = dataset
-            self.identifiers = None
-            self.quasi_identifiers = None
-            self.sensitive_attributes = None
-            self.worth_assignment = None
+        self.dataset = dataset
+        self.identifiers = None
+        self.quasi_identifiers = None
+        self.sensitive_attributes = None
+        self.worth_assignment = None
 
 ##### Public methods for single-dataset attacks.
 
     def ids(self, identifiers):
         "self.ids(['id_1',])"
+        "Raises TypeError unless given a list of strings, ValueError for one not in the dataset."
 
-        try:
-            if type(identifiers) is not list:
-                raise TypeError
-            elif type(identifiers) is list:
-                for i in identifiers:
-                    if type(i) is not str:
-                        raise TypeError
-                    elif i not in self.dataset.columns:
-                        raise ValueError(i)
+        if type(identifiers) is not list:
+            raise TypeError("A list of strings must be provided.")
+        for i in identifiers:
+            if type(i) is not str:
+                raise TypeError("A list of strings must be provided.")
+            elif i not in self.dataset.columns:
+                raise ValueError(f"{i} is not an attribute of the dataset.")
 
-        except TypeError:
-            print("A list of strings must be provided.")
-        except ValueError:
-            print(i, " is not an attribute of the dataset.")
-
-        else:
-            self.identifiers = identifiers
+        self.identifiers = identifiers
 
     def qids(self, quasi_identifiers):
         "self.qids(['quasi_identifier_1','quasi_identifier_2',])"
+        "Raises TypeError unless given a list of strings, ValueError for one not in the dataset."
 
-        try:
-            if type(quasi_identifiers) is not list:
-                raise TypeError
-            elif type(quasi_identifiers) is list:
-                for qid in quasi_identifiers:
-                    if type(qid) is not str:
-                        raise TypeError
-                    elif qid not in self.dataset.columns:
-                        raise ValueError(qid)
+        if type(quasi_identifiers) is not list:
+            raise TypeError("A list of strings must be provided.")
+        for qid in quasi_identifiers:
+            if type(qid) is not str:
+                raise TypeError("A list of strings must be provided.")
+            elif qid not in self.dataset.columns:
+                raise ValueError(f"{qid} is not an attribute of the dataset.")
 
-        except TypeError:
-            print("A list of strings must be provided.")
-        except ValueError:
-            print(qid, " is not an attribute of the dataset.")
-
-        else:
-            self.quasi_identifiers = quasi_identifiers
+        self.quasi_identifiers = quasi_identifiers
 
     def sensitive(self, sensitive_attributes):
         "self.sensitive(['sensitive_attribute_1','sensitive_attribute_2',])"
+        "Raises TypeError unless given a list of strings."
+        "Raises ValueError for one not in the dataset, or one listed more than once."
 
-        try:
-            if type(sensitive_attributes) is not list:
-                raise TypeError
-            elif type(sensitive_attributes) is list:
-                for s in sensitive_attributes:
-                    if type(s) is not str:
-                        raise TypeError
-                    elif s not in self.dataset.columns:
-                        raise ValueError(s)
+        if type(sensitive_attributes) is not list:
+            raise TypeError("A list of strings must be provided.")
+        for s in sensitive_attributes:
+            if type(s) is not str:
+                raise TypeError("A list of strings must be provided.")
+            elif s not in self.dataset.columns:
+                raise ValueError(f"{s} is not an attribute of the dataset.")
+            elif sensitive_attributes.count(s) > 1:
+                raise ValueError(f"{s} is listed more than once.")
 
-        except TypeError:
-            print("A list of strings must be provided.")
-        except ValueError:
-            print(s, " is not an attribute of the dataset.")
-
-        else:
-            self.sensitive_attributes = sensitive_attributes
+        self.sensitive_attributes = sensitive_attributes
 
     def worth(self, sensitive_attribute, worth_assignment):
         "self.worth('sensitive_attribute', {'val_1':worth_1,'val_2':worth_2,})"
+        "Raises TypeError unless given a string and a dictionary."
+        "Raises ValueError for an undefined sensitive attribute or a negative worth."
 
         # Must be run once for each sensitive attribute.
 
-        try:
-            if self.sensitive_attributes is None:
-                raise AttributeError
-            elif type(sensitive_attribute) is not str:
-                raise TypeError
-            elif sensitive_attribute not in self.sensitive_attributes:
-                raise ValueError(s)
-            elif type(worth_assignment) is not dict:
-                raise TypeError
+        if self.sensitive_attributes is None:
+            raise ValueError("The sensitive attributes have not been defined yet.")
+        elif type(sensitive_attribute) is not str:
+            raise TypeError("A string and a dictionary must be provided.")
+        elif sensitive_attribute not in self.sensitive_attributes:
+            raise ValueError(f"{sensitive_attribute} is not a defined sensitive attribute.")
+        elif type(worth_assignment) is not dict:
+            raise TypeError("A string and a dictionary must be provided.")
 
-        except AttributeError:
-            print("The sensitive attributes have not been defined yet.")
-        except TypeError:
-            print("A string and a dictionary must be provided.")
-        except ValueError:
-            print(s, " is not a defined sensitive attribute.")
+        if any([True if worth < 0 else False for value, worth in worth_assignment.items()]):
+            raise ValueError("Worth assignment cannot be negative!")
 
-        else:
-            try:
-                if any([True if worth < 0 else False for value, worth in worth_assignment.items()]):
-                    raise TypeError
-
-            except TypeError:
-                print("Worth assignment cannot be negative!")
-
-            else:
-                if self.worth_assignment is None:
-                    self.worth_assignment = {}
-                self.worth_assignment[sensitive_attribute] = worth_assignment
+        if self.worth_assignment is None:
+            self.worth_assignment = {}
+        self.worth_assignment[sensitive_attribute] = worth_assignment
 
     def assess(self):
         "self.assess()"
+        "Raises ValueError without quasi-identifiers, RuntimeError if an internal check fails."
 
-        try:
-            if self.quasi_identifiers is None:
-                raise TypeError
-
-        except TypeError:
-            print("One or more quasi-identifiers must be assigned.")
-
+        if self.quasi_identifiers is None:
+            raise ValueError("One or more quasi-identifiers must be assigned.")
         else:
             if len(self.quasi_identifiers) > 0:
                 "constants --> {sorted_dataset, attributes}"
@@ -207,13 +167,11 @@ class BVM():
                 "possible_values --> number of possible values for attribute"
                 possible_values = len(counts)
 
-                try:
-                    if class_size != sum(counts):
-                        raise ValueError(class_size, counts, self.quasi_identifiers, attribute)
-
-                except ValueError:
-                    print("class_size (=" + str(class_size) + ") and counts (=" + str(sum(counts)) + ") error!\n" +
-                          "QID: " + str(self.quasi_identifiers) + ". Sensitive attribute: " + attribute + ".")
+                if class_size != sum(counts):
+                    raise RuntimeError(
+                        "class_size (=" + str(class_size) + ") and counts (=" + str(sum(counts))
+                        + ") error!\n" + "QID: " + str(self.quasi_identifiers)
+                        + ". Sensitive attribute: " + attribute + ".")
 
                 bin_endpoint = math.ceil(100 * max_value / class_size)
                 bin_interval = f"({bin_endpoint - 1}, {bin_endpoint}]"
@@ -241,13 +199,10 @@ class BVM():
 
         if class_size_one:
             variables['dCR'] = variables['dCR'] + 1
-            try:
-                if class_size != 1:
-                    raise ValueError(class_size, self.quasi_identifiers)
-
-            except ValueError:
-                print("class_size (=" + str(class_size) + ") and class_size_one error!\n" +
-                      "QID: " + str(self.quasi_identifiers) + ".")
+            if class_size != 1:
+                raise RuntimeError(
+                    "class_size (=" + str(class_size) + ") and class_size_one error!\n"
+                    + "QID: " + str(self.quasi_identifiers) + ".")
 
         # Updates eq_class to new equivalence class.
         eq_class = row[0:len(self.quasi_identifiers)]
@@ -392,16 +347,17 @@ class BVM():
         "self.__setup() --> ({sorted_dataset, attributes}, {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA})"
         "self.__setup() --> ({sorted_dataset, attributes}, {re_id, dCR, pCR, bins, att_inf, sensitive_values, CA, information_worth, CW})"
 
-        sorted_dataset = self.dataset.sort_values(by=self.quasi_identifiers, axis='index', inplace=False, kind='mergesort')
+        sorted_dataset = self.dataset.sort_values(
+            by=self.quasi_identifiers, axis='index', kind='mergesort')
 
         re_id = pandas.DataFrame(columns=['QID', 'dCR', 'pCR', 'Prior', 'Posterior', 'Histogram'])
 
         dCR = 0
         pCR = 0
 
-        "bins --> {'re_id':{'0%':a,'1%':b,'2%':c,...,'100%':d},}"
-        "bins --> {'re_id':{'0%':a,'1%':b,'2%':c,...,'100%':d},'attr_1':{'0%':e,...,'100%':f},}"
-        "bins: 'x%' for chance of re-identification or attribute-inference, y% for amount of rows with 'x%' chance."
+        "bins --> {'re_id':{'(0, 1]':a,'(1, 2]':b,...,'(99, 100]':c},}"
+        "bins --> {'re_id':{'(0, 1]':a,...,'(99, 100]':b},'attr_1':{'(0, 1]':c,...,'(99, 100]':d},}"
+        "bins: '(x, y]' for the amount of rows whose chance is above x% and at most y%."
         bins = {}
         bins['re_id'] = {f"({i}, {i + 1}]": 0 for i in range(100)}
 
@@ -458,33 +414,32 @@ class BVMLongitudinal(BVM):
         "BVM.longitudinal([pandas.DataFrame_1, pandas.DataFrame_2,], [identifier_1, identifier_2,]): Initializes BVM class for longitudinal attacks linked by unique identifier attributes."
         "identifier_1 is the unique identifier attribute for dataset pandas.DataFrame_1."
         "pandas.DataFrame_1 is considered to be the focal dataset."
+        "Raises TypeError for an argument or entry of the wrong type, or lists of unequal lengths."
+        "Raises ValueError for an empty dataset or identifier, or an identifier not in its dataset."
 
-        try:
-            if type(datasets) is not list or type(identifiers) is not list or len(datasets) != len(identifiers):
-                raise TypeError
-            else:
-                i = 0
-                for i in range(len(datasets)):
-                    if type(datasets[i]) is not pandas.DataFrame or datasets[i].empty:
-                        raise TypeError
-                    elif type(identifiers[i]) is not str or identifiers[i] == "":
-                        raise TypeError
-                    elif identifiers[i] not in datasets[i].columns:
-                        raise ValueError(i)
-                    i = i + 1
+        message = ("A non-empty list of pandas DataFrames and a non-empty list of strings for the "
+                   "identifying attributes, both with the same length, must be provided.")
+        if (type(datasets) is not list or type(identifiers) is not list
+                or len(datasets) != len(identifiers)):
+            raise TypeError(message)
+        for i in range(len(datasets)):
+            if type(datasets[i]) is not pandas.DataFrame:
+                raise TypeError(message)
+            elif datasets[i].empty:
+                raise ValueError(message)
+            elif type(identifiers[i]) is not str:
+                raise TypeError(message)
+            elif identifiers[i] == "":
+                raise ValueError(message)
+            elif identifiers[i] not in datasets[i].columns:
+                raise ValueError(f"{i} is not an attribute of the respective dataset.")
 
-        except TypeError:
-            print("A non-empty list of pandas DataFrames and a non-empty list of strings for the identifying attributes, both with the same legth, must be provided.")
-        except ValueError:
-            print(i, " is not an attribute of the respective dataset.")
-
-        else:
-                self.dataset = None
-                self.datasets = datasets
-                self.identifiers = identifiers
-                self.quasi_identifiers = None
-                self.all_quasi_identifiers = None
-                self.sensitive_attributes = None
+        self.dataset = None
+        self.datasets = datasets
+        self.identifiers = identifiers
+        self.quasi_identifiers = None
+        self.all_quasi_identifiers = None
+        self.sensitive_attributes = None
 
 ##### Public methods for longitudinal attacks.
 
@@ -494,83 +449,70 @@ class BVMLongitudinal(BVM):
 
         i = 1
         for identifier in self.identifiers:
-            print("Indetifying attribute for dataset " + str(i) + ": " + identifier + ".")
+            print("Identifying attribute for dataset " + str(i) + ": " + identifier + ".")
             i = i + 1
 
     def qids(self, quasi_identifiers):
         "self.qids([['quasi_identifier_1_1','quasi_identifier_1_2',], ['quasi_identifier_2_1','quasi_identifier_2_2',],])"
         "quasi_identifier_1_1 is an attribute from dataset pandas.DataFrame_1 and quasi_identifier_2_1 is the equivalent attribute from dataset pandas.DataFrame_2."
         "If all attributes have the same label on all datasets, only one list of quasi-identifiers can be provided."
+        "Raises TypeError for an argument or entry of the wrong type."
+        "Raises ValueError for a quasi-identifier that is not an attribute of its dataset."
 
-        try:
-            if type(quasi_identifiers) is not list:
-                raise TypeError
-            elif type(quasi_identifiers) is list:
-                # If quasi_identifiers[0] is a list, all other entries must also be.
-                if type(quasi_identifiers[0]) is list:
-                    i = 0
-                    for qid_list in quasi_identifiers:
-                        if type(qid_list) is not list:
-                            raise TypeError
-                        elif type(qid_list) is list:
-                            for qid in qid_list:
-                                if type(qid) is not str:
-                                    raise ValueError(qid)
-                                elif qid not in self.datasets[i].columns:
-                                    raise ValueError(qid)
-                        i = i + 1
-                # If quasi_identifiers[0] is a string, all other entries must also be.
-                elif type(quasi_identifiers[0]) is str:
-                    for qid in quasi_identifiers:
-                        i = 0
-                        if type(qid) is not str:
-                            raise ValueError(qid)
-                        for dataset in self.datasets:
-                            if qid not in dataset[i].columns:
-                                raise ValueError(qid)
-                            i = i + 1
+        types = "A list of strings or a list of lists of strings must be provided."
+        not_found = " is not a string or is not an attribute of the respective dataset."
+        if type(quasi_identifiers) is not list:
+            raise TypeError(types)
+        # If quasi_identifiers[0] is a list, all other entries must also be.
+        if type(quasi_identifiers[0]) is list:
+            i = 0
+            for qid_list in quasi_identifiers:
+                if type(qid_list) is not list:
+                    raise TypeError(types)
+                for qid in qid_list:
+                    if type(qid) is not str:
+                        raise TypeError(f"{qid}{not_found}")
+                    elif qid not in self.datasets[i].columns:
+                        raise ValueError(f"{qid}{not_found}")
+                i = i + 1
+        # If quasi_identifiers[0] is a string, all other entries must also be.
+        elif type(quasi_identifiers[0]) is str:
+            for qid in quasi_identifiers:
+                i = 0
+                if type(qid) is not str:
+                    raise TypeError(f"{qid}{not_found}")
+                for dataset in self.datasets:
+                    if qid not in dataset[i].columns:
+                        raise ValueError(f"{qid}{not_found}")
+                    i = i + 1
 
-        except TypeError:
-            print("A list of strings or a list of lists of strings must be provided.")
-        except ValueError:
-            print(qid, " is not a string or is not an attribute of the respective dataset.")
-
-        else:
-            self.quasi_identifiers = quasi_identifiers
+        self.quasi_identifiers = quasi_identifiers
 
     def sensitive(self, sensitive_attributes):
         "self.sensitive(['sensitive_attribute_1','sensitive_attribute_2',])"
         "All sensitive attributes are attributes from dataset pandas.DataFrame_1."
+        "Raises TypeError unless given a list of strings."
+        "Raises ValueError for one not in DataFrame_1, or one listed more than once."
 
-        try:
-            if type(sensitive_attributes) is not list:
-                raise TypeError
-            elif type(sensitive_attributes) is list:
-                for s in sensitive_attributes:
-                    if type(s) is not str:
-                        raise TypeError
-                    elif s not in self.datasets[0].columns:
-                        raise ValueError(s)
+        if type(sensitive_attributes) is not list:
+            raise TypeError("A list of strings must be provided.")
+        for s in sensitive_attributes:
+            if type(s) is not str:
+                raise TypeError("A list of strings must be provided.")
+            elif s not in self.datasets[0].columns:
+                raise ValueError(f"{s} is not an attribute of the focal dataset.")
+            elif sensitive_attributes.count(s) > 1:
+                raise ValueError(f"{s} is listed more than once.")
 
-        except TypeError:
-            print("A list of strings must be provided.")
-        except ValueError:
-            print(s, " is not an attribute of the focal dataset.")
-
-        else:
-            self.sensitive_attributes = sensitive_attributes
+        self.sensitive_attributes = sensitive_attributes
 
     def assess(self):
         "self.assess()"
+        "Raises ValueError without quasi-identifiers, RuntimeError if an internal check fails."
         # Makes use of __setup(self), __compute(self, constants, variables), and __update_eq_class(self, variables, eq_class, eq_class_size, row) from parent class BVM().
 
-        try:
-            if self.quasi_identifiers is None:
-                raise TypeError
-
-        except TypeError:
-            print("One or more quasi-identifiers must be assigned.")
-
+        if self.quasi_identifiers is None:
+            raise ValueError("One or more quasi-identifiers must be assigned.")
         else:
             if len(self.quasi_identifiers) > 0:
 
