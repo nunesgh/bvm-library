@@ -67,7 +67,7 @@ def filled(frame):
         if column.dtype.kind == "M":
             fill = pandas.Timestamp("2000-01-01")
             if len(present) > 0:
-                fill = present.max() + pandas.Timedelta(days=1)
+                fill = present.max() + pandas.Timedelta(1, unit="D")
         elif pandas.api.types.is_numeric_dtype(column):
             fill = present.max() + 1 if len(present) > 0 else 0
         else:
