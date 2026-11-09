@@ -18,6 +18,7 @@ path = [
     ".gitignore",
     "CITATION.cff",
     # Documentation.
+    "CHANGELOG.md",
     "README.md",
     "examples/README.md",
     # The INEP notebooks, which hold the published results and are not re-saved.
