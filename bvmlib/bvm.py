@@ -43,6 +43,11 @@ _RE_ID = None
 _JOINED_MISSING = '\\missing'
 _JOINED_ABSENT = '\\absent'
 
+# With two or more datasets, the join writes the joined values into the focal dataset's
+# quasi-identifiers, so a sensitive attribute among them would be assessed on the joined values.
+_SENSITIVE_AND_QID = (" is both a sensitive attribute and a quasi-identifier of dataset 1, which "
+                      "BVMLongitudinal cannot assess with two or more datasets.")
+
 def _joined_text(column):
     "The text of each value of column for the longitudinal join, as a Series of strings."
 
@@ -92,37 +97,48 @@ class BVM():
     def qids(self, quasi_identifiers):
         "self.qids(['quasi_identifier_1','quasi_identifier_2',])"
         "Raises TypeError unless given a list of strings, ValueError for one not in the dataset."
+        "Raises ValueError for one listed more than once."
+        "An empty list assigns no quasi-identifiers: assess() then returns None."
 
         if type(quasi_identifiers) is not list:
             raise TypeError("A list of strings must be provided.")
-        for qid in quasi_identifiers:
+        for index, qid in enumerate(quasi_identifiers):
             if type(qid) is not str:
                 raise TypeError("A list of strings must be provided.")
             elif qid not in self.dataset.columns:
                 raise ValueError(f"{qid} is not an attribute of the dataset.")
+            # Only the earlier entries, already checked to be strings.
+            elif qid in quasi_identifiers[:index]:
+                raise ValueError(f"{qid} is listed more than once.")
 
-        self.quasi_identifiers = quasi_identifiers
+        # A copy, so that a later change to the caller's list cannot bypass the checks above.
+        self.quasi_identifiers = quasi_identifiers.copy()
 
     def sensitive(self, sensitive_attributes):
         "self.sensitive(['sensitive_attribute_1','sensitive_attribute_2',])"
         "Raises TypeError unless given a list of strings."
         "Raises ValueError for one not in the dataset, or one listed more than once."
+        "An empty list assigns no sensitive attributes: assess() then gives re-identification only."
 
         if type(sensitive_attributes) is not list:
             raise TypeError("A list of strings must be provided.")
-        for s in sensitive_attributes:
+        for index, s in enumerate(sensitive_attributes):
             if type(s) is not str:
                 raise TypeError("A list of strings must be provided.")
             elif s not in self.dataset.columns:
                 raise ValueError(f"{s} is not an attribute of the dataset.")
-            elif sensitive_attributes.count(s) > 1:
+            # Only the earlier entries, already checked to be strings.
+            elif s in sensitive_attributes[:index]:
                 raise ValueError(f"{s} is listed more than once.")
 
-        self.sensitive_attributes = sensitive_attributes
+        # A copy, so that a later change to the caller's list cannot bypass the checks above, or
+        # None for an empty list, as before any call.
+        self.sensitive_attributes = sensitive_attributes.copy() if sensitive_attributes else None
 
     def worth(self, sensitive_attribute, worth_assignment):
         "self.worth('sensitive_attribute', {'val_1':worth_1,'val_2':worth_2,})"
         "Each value is matched by its text, str(value); missing values by the key None."
+        "Each worth is stored as a float."
         "Raises TypeError unless given a string and a dictionary, or for a worth not a number."
         "Raises TypeError for a key that is neither a string nor None."
         "Raises ValueError for an undefined sensitive attribute or a negative worth."
@@ -144,21 +160,23 @@ class BVM():
             raise TypeError("Worth assignments must be numbers.")
 
         if any([True if worth < 0 else False for value, worth in worth_assignment.items()]):
-            raise ValueError("Worth assignment cannot be negative!")
+            raise ValueError("Worth assignments cannot be negative.")
         elif not all(math.isfinite(worth) for worth in worth_assignment.values()):
             raise ValueError("Worth assignments must be finite.")
 
         if self.worth_assignment is None:
             self.worth_assignment = {}
-        # A copy, so that a later change to the caller's dictionary cannot bypass the checks above.
-        self.worth_assignment[sensitive_attribute] = worth_assignment.copy()
+        # A copy, so that a later change to the caller's dictionary cannot bypass the checks above,
+        # with each worth as a float, so that every kind of real number gives the same results.
+        self.worth_assignment[sensitive_attribute] = {
+            value: float(worth) for value, worth in worth_assignment.items()}
 
     def assess(self):
         "self.assess()"
-        "Raises ValueError without quasi-identifiers, RuntimeError if an internal check fails."
+        "Raises ValueError if qids() has not been called, RuntimeError if an internal check fails."
 
         if self.quasi_identifiers is None:
-            raise ValueError("One or more quasi-identifiers must be assigned.")
+            raise ValueError("The quasi-identifiers have not been defined yet.")
         else:
             if len(self.quasi_identifiers) > 0:
                 "constants --> {sorted_dataset, attributes}"
@@ -459,38 +477,39 @@ class BVMLongitudinal(BVM):
         "identifier_1 is the unique identifier attribute for dataset pandas.DataFrame_1."
         "Each identifier is a string, or a list holding exactly one string."
         "pandas.DataFrame_1 is considered to be the focal dataset."
-        "Raises TypeError for an argument or entry of the wrong type, or lists of unequal lengths."
-        "Raises ValueError for an empty dataset or identifier, or an identifier not in its dataset."
+        "Raises TypeError for an argument or entry of the wrong type."
+        "Raises ValueError for empty lists or lists of unequal lengths."
+        "Raises ValueError for an empty dataset, or an identifier not in its dataset."
         "Raises ValueError for a list of several identifiers for one dataset."
 
         message = ("A non-empty list of pandas DataFrames and a non-empty list of identifying "
                    "attributes, each a string or a list holding one string, both with the same "
                    "length, must be provided.")
-        if (type(datasets) is not list or type(identifiers) is not list
-                or len(datasets) != len(identifiers)):
+        if type(datasets) is not list or type(identifiers) is not list:
             raise TypeError(message)
+        elif len(datasets) != len(identifiers) or len(datasets) == 0:
+            raise ValueError(message)
         # A list holding exactly one string stands for that string.
         identifiers = [
             identifier[0] if type(identifier) is list and len(identifier) == 1 else identifier
             for identifier in identifiers]
         for i in range(len(datasets)):
             if type(datasets[i]) is not pandas.DataFrame:
-                raise TypeError(message)
+                raise TypeError(f"Dataset {i + 1} must be a pandas DataFrame.")
             elif datasets[i].empty:
-                raise ValueError(message)
+                raise ValueError(f"Dataset {i + 1} cannot be empty.")
             elif (type(identifiers[i]) is list and len(identifiers[i]) > 1
                     and all(type(identifier) is str for identifier in identifiers[i])):
                 raise ValueError(f"{identifiers[i]} lists several identifying attributes: each "
                                  "dataset is linked by one, a string or a list holding one string.")
             elif type(identifiers[i]) is not str:
                 raise TypeError(message)
-            elif identifiers[i] == "":
-                raise ValueError(message)
             elif identifiers[i] not in datasets[i].columns:
-                raise ValueError(f"{i} is not an attribute of the respective dataset.")
+                raise ValueError(f"{identifiers[i]} is not an attribute of dataset {i + 1}.")
 
         self.dataset = None
-        self.datasets = datasets
+        # A copy, so that a later change to the caller's list cannot bypass the checks above.
+        self.datasets = datasets.copy()
         self.identifiers = identifiers
         self.quasi_identifiers = None
         self.all_quasi_identifiers = None
@@ -514,17 +533,27 @@ class BVMLongitudinal(BVM):
         "If all attributes have the same label on all datasets, only one list of quasi-identifiers can be provided."
         "Raises TypeError for an argument or entry of the wrong type."
         "Raises ValueError for a quasi-identifier that is not an attribute of its dataset."
-        "Raises ValueError for an empty list, or lists of unequal lengths."
+        "Raises ValueError for lists of unequal lengths, or a list of empty lists."
         "Raises ValueError unless a list of lists holds one list for each dataset."
+        "An empty list assigns no quasi-identifiers: assess() then returns None."
+        "Raises ValueError for a quasi-identifier listed more than once in a list."
+        "With two or more datasets, raises ValueError for an identifier in its dataset's list."
+        "With two or more datasets, raises ValueError for a sensitive attribute in DataFrame_1's."
 
         types = "A list of strings or a list of lists of strings must be provided."
         lists = ("A non-empty list of quasi-identifiers for each dataset, all with the same "
                  "length, must be provided.")
-        not_found = " is not a string or is not an attribute of the respective dataset."
+        twice = " is listed more than once for dataset "
+        # The join links the datasets by their identifiers, and writes the joined values into the
+        # focal dataset's quasi-identifiers.
+        identifier = " is both the identifying attribute and a quasi-identifier of dataset "
+        cannot = ", which BVMLongitudinal cannot assess with two or more datasets."
         if type(quasi_identifiers) is not list:
             raise TypeError(types)
         elif len(quasi_identifiers) == 0:
-            raise ValueError(lists)
+            self.all_quasi_identifiers = [[] for dataset in self.datasets]
+            self.quasi_identifiers = self.all_quasi_identifiers[0]
+            return
         # If quasi_identifiers[0] is a list, all other entries must also be, one for each dataset,
         # all as long as the first, which cannot be empty.
         if type(quasi_identifiers[0]) is list:
@@ -536,57 +565,80 @@ class BVMLongitudinal(BVM):
                     raise TypeError(types)
                 elif len(qid_list) != len(quasi_identifiers[0]):
                     raise ValueError(lists)
-                for qid in qid_list:
+                for index, qid in enumerate(qid_list):
                     if type(qid) is not str:
-                        raise TypeError(f"{qid}{not_found}")
+                        raise TypeError(types)
                     elif qid not in self.datasets[i].columns:
-                        raise ValueError(f"{qid}{not_found}")
+                        raise ValueError(f"{qid} is not an attribute of dataset {i + 1}.")
+                    # Only the earlier entries, already checked to be strings.
+                    elif qid in qid_list[:index]:
+                        raise ValueError(f"{qid}{twice}{i + 1}.")
+                    elif len(self.datasets) > 1 and qid == self.identifiers[i]:
+                        raise ValueError(f"{qid}{identifier}{i + 1}{cannot}")
                 i = i + 1
         # If quasi_identifiers[0] is a string, all other entries must also be.
         elif type(quasi_identifiers[0]) is str:
-            for qid in quasi_identifiers:
+            for index, qid in enumerate(quasi_identifiers):
                 if type(qid) is not str:
-                    raise TypeError(f"{qid}{not_found}")
-                for dataset in self.datasets:
-                    if qid not in dataset.columns:
-                        raise ValueError(f"{qid}{not_found}")
+                    raise TypeError(types)
+                for j in range(len(self.datasets)):
+                    if qid not in self.datasets[j].columns:
+                        raise ValueError(f"{qid} is not an attribute of dataset {j + 1}.")
+                if qid in quasi_identifiers[:index]:
+                    raise ValueError(f"{qid}{twice}1.")
+                elif len(self.datasets) > 1 and qid in self.identifiers:
+                    raise ValueError(f"{qid}{identifier}{self.identifiers.index(qid) + 1}{cannot}")
             # The same list for every dataset.
             quasi_identifiers = [quasi_identifiers] * len(self.datasets)
         else:
             raise TypeError(types)
 
+        if len(self.datasets) > 1 and self.sensitive_attributes is not None:
+            for qid in quasi_identifiers[0]:
+                if qid in self.sensitive_attributes:
+                    raise ValueError(f"{qid}{_SENSITIVE_AND_QID}")
+
         # The join reads every dataset's list; the methods of BVM read the focal dataset's, which
-        # names the joined columns.
-        self.all_quasi_identifiers = quasi_identifiers
-        self.quasi_identifiers = quasi_identifiers[0]
+        # names the joined columns. Copies, so that a later change to the caller's lists cannot
+        # bypass the checks above.
+        self.all_quasi_identifiers = [qid_list.copy() for qid_list in quasi_identifiers]
+        self.quasi_identifiers = self.all_quasi_identifiers[0]
 
     def sensitive(self, sensitive_attributes):
         "self.sensitive(['sensitive_attribute_1','sensitive_attribute_2',])"
         "All sensitive attributes are attributes from dataset pandas.DataFrame_1."
         "Raises TypeError unless given a list of strings."
         "Raises ValueError for one not in DataFrame_1, or one listed more than once."
+        "With two or more datasets, raises ValueError for a quasi-identifier of DataFrame_1."
+        "An empty list assigns no sensitive attributes: assess() then gives re-identification only."
 
         if type(sensitive_attributes) is not list:
             raise TypeError("A list of strings must be provided.")
-        for s in sensitive_attributes:
+        for index, s in enumerate(sensitive_attributes):
             if type(s) is not str:
                 raise TypeError("A list of strings must be provided.")
             elif s not in self.datasets[0].columns:
-                raise ValueError(f"{s} is not an attribute of the focal dataset.")
-            elif sensitive_attributes.count(s) > 1:
-                raise ValueError(f"{s} is listed more than once.")
+                raise ValueError(f"{s} is not an attribute of dataset 1.")
+            # Only the earlier entries, already checked to be strings.
+            elif s in sensitive_attributes[:index]:
+                raise ValueError(f"{s} is listed more than once for dataset 1.")
+            elif (len(self.datasets) > 1 and self.quasi_identifiers is not None
+                    and s in self.quasi_identifiers):
+                raise ValueError(f"{s}{_SENSITIVE_AND_QID}")
 
-        self.sensitive_attributes = sensitive_attributes
+        # A copy, so that a later change to the caller's list cannot bypass the checks above, or
+        # None for an empty list, as before any call.
+        self.sensitive_attributes = sensitive_attributes.copy() if sensitive_attributes else None
 
     def assess(self):
         "self.assess()"
         "With two or more datasets, the later ones are left-joined onto the focal one."
         "A missing value and a row absent from a later dataset are two values of their own there."
-        "Raises ValueError without quasi-identifiers, RuntimeError if an internal check fails."
+        "Raises ValueError if qids() has not been called, RuntimeError if an internal check fails."
         # Makes use of __setup(self), __compute(self, constants, variables), and __update_eq_class(self, variables, eq_class, eq_class_size, row) from parent class BVM().
 
         if self.quasi_identifiers is None:
-            raise ValueError("One or more quasi-identifiers must be assigned.")
+            raise ValueError("The quasi-identifiers have not been defined yet.")
         else:
             if len(self.quasi_identifiers) > 0:
 

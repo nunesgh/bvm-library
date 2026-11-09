@@ -10,6 +10,7 @@
 import re
 from fractions import Fraction
 
+import numpy
 import pandas
 import pytest
 
@@ -214,6 +215,18 @@ def test_worth_accepts_numbers_of_other_types():
     expect_worth(assess(TABLE, ["q"], ["s"], {"s": worths}), "s", prior=1, posterior=7 / 6)
 
 
+def test_worths_of_every_kind_give_float_results():
+    # Each worth is stored as a float, so a small numpy integer cannot overflow (2 * 100 in int8),
+    # and a float32 or a Fraction gives float64 results. Prior: a, 3 / 6 * 100. Posterior: class 1
+    # a 2 * 100, class 2 b or c 0.5, class 3 a 100, over 6.
+    worths = {"a": numpy.int8(100), "b": numpy.float32(0.5), "c": Fraction(1, 2)}
+    results = assess(TABLE, ["q"], ["s"], {"s": worths})
+    expect_worth(results, "s", prior=50, posterior=300.5 / 6)
+    table = results["information_worth"]
+    assert table["Prior Worth"].dtype == "float64"
+    assert table["Posterior Worth"].dtype == "float64"
+
+
 @pytest.mark.parametrize("worth", ["1", None, 1j, [1], NA], ids=repr)
 def test_worth_rejects_a_worth_that_is_not_a_number(worth):
     bvm = BVM(TABLE)
@@ -235,7 +248,7 @@ def test_worth_rejects_a_worth_that_is_not_finite(worth):
 def test_worth_rejects_minus_infinity_as_negative():
     bvm = BVM(TABLE)
     bvm.sensitive(["s"])
-    with pytest.raises(ValueError, match=exactly("Worth assignment cannot be negative!")):
+    with pytest.raises(ValueError, match=exactly("Worth assignments cannot be negative.")):
         bvm.worth("s", {"a": 1, "b": -INF})
 
 

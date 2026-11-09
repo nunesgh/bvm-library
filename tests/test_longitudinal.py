@@ -23,7 +23,7 @@ LABELS = ["(" + str(k - 1) + ", " + str(k) + "]" for k in range(1, 101)]
 DATASETS = ("A non-empty list of pandas DataFrames and a non-empty list of identifying "
             "attributes, each a string or a list holding one string, both with the same "
             "length, must be provided.")
-NOT_FOUND = " is not a string or is not an attribute of the respective dataset."
+QID_LISTS = "A list of strings or a list of lists of strings must be provided."
 
 
 def histogram(fractions):
@@ -130,10 +130,10 @@ def test_a_flat_list_of_quasi_identifiers_for_three_datasets():
 
 
 @pytest.mark.parametrize("names, error, message", [
-    (["q", 1], TypeError, "1" + NOT_FOUND),
-    (["q", ["r"]], TypeError, "['r']" + NOT_FOUND),
+    (["q", 1], TypeError, QID_LISTS),
+    (["q", ["r"]], TypeError, QID_LISTS),
     # s is a column of the first dataset only.
-    (["q", "s"], ValueError, "s" + NOT_FOUND),
+    (["q", "s"], ValueError, "s is not an attribute of dataset 2."),
 ])
 def test_a_flat_list_with_an_invalid_name(names, error, message):
     bvm = BVMLongitudinal([SAME_FIRST, SAME_SECOND], ["id", "id"])
@@ -178,8 +178,8 @@ def test_a_list_of_several_identifiers_is_refused():
     ([["id"]], TypeError, DATASETS),
     ([1], TypeError, DATASETS),
     (["id", 1], TypeError, DATASETS),
-    ([""], ValueError, DATASETS),
-    (["r"], ValueError, "0 is not an attribute of the respective dataset."),
+    ([""], ValueError, " is not an attribute of dataset 1."),
+    (["r"], ValueError, "r is not an attribute of dataset 1."),
 ])
 def test_other_lists_are_refused_as_identifiers(identifier, error, message):
     with pytest.raises(error, match=exactly(message)):
@@ -451,6 +451,125 @@ def test_the_notebooks_call_shape(years):
     # Guard: assess() leaves the caller's datasets as they were.
     for dataset, copy in zip(datasets, copies):
         pandas.testing.assert_frame_equal(dataset, copy)
+
+
+# A sensitive attribute among the focal quasi-identifiers, or a dataset's identifier among its own:
+# with two or more datasets the join writes the joined values into the focal quasi-identifiers, so
+# both are refused; one dataset is not joined, and allows both, as BVM does. Sharing a name with
+# another dataset's quasi-identifier or identifier is allowed.
+
+CONSTANT = pandas.DataFrame({"id": [1, 2, 3, 4], "q": ["x", "x", "x", "x"]})
+LATER_Q = pandas.DataFrame({"id": [1, 2, 3, 4], "q": ["u", "v", "w", "w"]})
+BOTH = ("q is both a sensitive attribute and a quasi-identifier of dataset 1, which "
+        "BVMLongitudinal cannot assess with two or more datasets.")
+
+
+@pytest.mark.parametrize("count", [2, 3])
+@pytest.mark.parametrize("sensitive_first", [False, True], ids=["qids_first", "sensitive_first"])
+def test_two_or_more_datasets_refuse_a_sensitive_quasi_identifier(sensitive_first, count):
+    bvm = BVMLongitudinal([CONSTANT] + [LATER_Q] * (count - 1), ["id"] * count)
+    if sensitive_first:
+        bvm.sensitive(["q"])
+        with pytest.raises(ValueError, match=exactly(BOTH)):
+            bvm.qids([["q"]] * count)
+        # The rejected call set no quasi-identifiers.
+        with pytest.raises(ValueError, match=exactly("The quasi-identifiers have not been "
+                                                     "defined yet.")):
+            bvm.assess()
+    else:
+        bvm.qids([["q"]] * count)
+        with pytest.raises(ValueError, match=exactly(BOTH)):
+            bvm.sensitive(["q"])
+        # The rejected call set no sensitive attributes. Classes, by the later values: u id 1,
+        # v id 2, w ids 3 and 4.
+        results = bvm.assess()
+        assert "att_inf" not in results
+        bins = {"(99, 100]": 2 / 4, "(49, 50]": 2 / 4}
+        expect_re_id(results, dCR=2 / 4, pCR=3, rows=4, bins=bins)
+
+
+@pytest.mark.parametrize("sensitive_first", [False, True], ids=["qids_first", "sensitive_first"])
+def test_one_dataset_allows_a_sensitive_attribute_among_the_quasi_identifiers(sensitive_first):
+    # One class, q x throughout: dCA 0 (one value overall), pCA 1, Prior and Posterior 1.
+    bvm = BVMLongitudinal([CONSTANT], ["id"])
+    if sensitive_first:
+        bvm.sensitive(["q"])
+    bvm.qids([["q"]])
+    if not sensitive_first:
+        bvm.sensitive(["q"])
+    results = bvm.assess()
+    expect_re_id(results, dCR=0, pCR=1, rows=4, bins={"(24, 25]": 1})
+    expect_att_inf(results, "q", dCA=0, pCA=1, prior=1, posterior=1, bins={"(99, 100]": 1})
+    bvm = BVM(CONSTANT)
+    bvm.qids(["q"])
+    bvm.sensitive(["q"])
+    expect_same_results(results, bvm.assess())
+
+
+@pytest.mark.parametrize("qids", [["id"], [["id"]], ["q", "id"]], ids=repr)
+def test_one_dataset_allows_its_identifier_among_the_quasi_identifiers(qids):
+    # Each id is a class of its own.
+    results = assess([FOCAL], ["id"], qids)
+    expect_re_id(results, dCR=1, pCR=4, rows=4, bins={"(99, 100]": 1})
+
+
+@pytest.mark.parametrize("sensitive_first", [False, True], ids=["qids_first", "sensitive_first"])
+def test_a_sensitive_attribute_may_share_its_name_with_a_later_quasi_identifier(sensitive_first):
+    # The focal s is sensitive, the later s a quasi-identifier. Classes on (q, later s): (1, 5)
+    # ids 1 and 2, (1, 6) id 3, (2, 6) id 4. The focal s: {a, b}, {a}, {a}; a 3 of 4 overall.
+    later = pandas.DataFrame({"id": [1, 2, 3, 4], "s": [5, 5, 6, 6]})
+    bvm = BVMLongitudinal([FOCAL, later], ["id", "id"])
+    if sensitive_first:
+        bvm.sensitive(["s"])
+    bvm.qids([["q"], ["s"]])
+    if not sensitive_first:
+        bvm.sensitive(["s"])
+    results = bvm.assess()
+    bins = {"(49, 50]": 2 / 4, "(99, 100]": 2 / 4}
+    expect_re_id(results, dCR=2 / 4, pCR=3, rows=4, bins=bins)
+    expect_att_inf(results, "s", dCA=2 / 4, pCA=1, prior=3 / 4, posterior=3 / 4, bins=bins)
+
+
+@pytest.mark.parametrize("qids, dCR, pCR, bins", [
+    # The focal list names key, the later identifier. Classes: (7, 0) ids 1 and 2, (8, 0) id 3,
+    # (9, 0) id 4.
+    ([["key"], ["r"]], 2 / 4, 3, {"(49, 50]": 2 / 4, "(99, 100]": 2 / 4}),
+    # The later list names id, the focal identifier. Classes: (1, 5) ids 1 to 3, (1, 6) id 4.
+    ([["q"], ["id"]], 1 / 4, 2, {"(33, 34]": 3 / 4, "(99, 100]": 1 / 4}),
+], ids=["focal_list", "later_list"])
+def test_a_list_may_name_another_datasets_identifier(qids, dCR, pCR, bins):
+    focal = pandas.DataFrame({"id": [1, 2, 3, 4], "key": [7, 7, 8, 9], "q": [1, 1, 1, 1]})
+    later = pandas.DataFrame({"key": [1, 2, 3, 4], "id": [5, 5, 5, 6], "r": [0, 0, 0, 0]})
+    results = assess([focal, later], ["id", "key"], qids)
+    expect_re_id(results, dCR=dCR, pCR=pCR, rows=4, bins=bins)
+
+
+@pytest.mark.parametrize("qids, sensitive", [(["r", "q"], ["s", "q"]), (["q", "r"], ["q", "s"])],
+                         ids=["last", "first"])
+@pytest.mark.parametrize("sensitive_first", [False, True], ids=["qids_first", "sensitive_first"])
+def test_the_overlap_is_found_in_any_position(qids, sensitive, sensitive_first):
+    # q is a focal quasi-identifier and a sensitive attribute, last or first in both lists.
+    focal = CONSTANT.assign(r=[1, 1, 2, 2], s=["a", "b", "a", "b"])
+    later = LATER_Q.assign(r=[3, 3, 4, 4])
+    bvm = BVMLongitudinal([focal, later], ["id", "id"])
+    if sensitive_first:
+        bvm.sensitive(sensitive)
+        with pytest.raises(ValueError, match=exactly(BOTH)):
+            bvm.qids([qids, qids])
+    else:
+        bvm.qids([qids, qids])
+        with pytest.raises(ValueError, match=exactly(BOTH)):
+            bvm.sensitive(sensitive)
+
+
+@pytest.mark.parametrize("qids", [[["id"], ["id"]], ["id"]], ids=repr)
+def test_a_quasi_identifier_may_have_a_name_inside_its_datasets_identifier(qids):
+    # Only co_id itself is refused, not id. Classes on (id, later id): (1, 5) codes 1 and 2,
+    # (2, 6) codes 3 and 4.
+    focal = pandas.DataFrame({"co_id": [1, 2, 3, 4], "id": [1, 1, 2, 2]})
+    later = pandas.DataFrame({"co_id": [1, 2, 3, 4], "id": [5, 5, 6, 6]})
+    results = assess([focal, later], ["co_id", "co_id"], qids)
+    expect_re_id(results, dCR=0, pCR=2, rows=4, bins={"(49, 50]": 1})
 
 
 # Assessing more than once.
