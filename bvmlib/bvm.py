@@ -48,6 +48,14 @@ _JOINED_ABSENT = '\\absent'
 _SENSITIVE_AND_QID = (" is both a sensitive attribute and a quasi-identifier of dataset 1, which "
                       "BVMLongitudinal cannot assess with two or more datasets.")
 
+def _finite(number):
+    "Whether number is finite as a float: a number too large for a float is not."
+
+    try:
+        return math.isfinite(number)
+    except OverflowError:
+        return False
+
 def _joined_text(column):
     "The text of each value of column for the longitudinal join, as a Series of strings."
 
@@ -57,7 +65,8 @@ def _joined_text(column):
         [_JOINED_MISSING if is_missing else str(value).replace('\\', '\\\\').replace('#', '\\#')
          for value, is_missing in zip(values, missing)], index=column.index)
 
-@dataclass
+# eq=False keeps comparison and hashing by identity: the class declares no fields.
+@dataclass(eq=False)
 class BVM():
     "Bayes Vulnerability for Microdata class dedicated to single-dataset vulnerability assessment."
 
@@ -142,7 +151,7 @@ class BVM():
         "Raises TypeError unless given a string and a dictionary, or for a worth not a number."
         "Raises TypeError for a key that is neither a string nor None."
         "Raises ValueError for an undefined sensitive attribute or a negative worth."
-        "Raises ValueError for an infinite or NaN worth."
+        "Raises ValueError for an infinite or NaN worth, or one too large for a float."
 
         # Must be run once for each sensitive attribute.
 
@@ -161,7 +170,7 @@ class BVM():
 
         if any([True if worth < 0 else False for value, worth in worth_assignment.items()]):
             raise ValueError("Worth assignments cannot be negative.")
-        elif not all(math.isfinite(worth) for worth in worth_assignment.values()):
+        elif not all(_finite(worth) for worth in worth_assignment.values()):
             raise ValueError("Worth assignments must be finite.")
 
         if self.worth_assignment is None:
@@ -466,7 +475,8 @@ class BVM():
             return ({'sorted_dataset': sorted_dataset, 'attributes': attributes},
                     {'re_id': re_id, 'dCR': dCR, 'pCR': pCR, 'bins': bins,})
 
-@dataclass
+# eq=False keeps comparison and hashing by identity: the class declares no fields.
+@dataclass(eq=False)
 class BVMLongitudinal(BVM):
     "Bayes Vulnerability for Microdata class dedicated to longitudinal vulnerability assessment."
 

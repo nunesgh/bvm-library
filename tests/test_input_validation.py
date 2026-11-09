@@ -263,6 +263,14 @@ def test_longitudinal_names_the_first_dataset_at_fault():
         BVMLongitudinal([first, second], ["key", "key"])
 
 
+def test_objects_compare_and_hash_by_identity():
+    for make in (lambda: BVM(table()), longitudinal):
+        first, second = make(), make()
+        assert first == first
+        assert first != second
+        assert len({first, second, first}) == 2
+
+
 def test_longitudinal_keeps_its_own_list_of_datasets():
     # A dataset added to the caller's list afterwards is not part of the assessment: a is a column
     # of the first dataset only, and each of its two rows is a class of its own.

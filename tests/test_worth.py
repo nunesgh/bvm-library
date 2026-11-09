@@ -236,8 +236,8 @@ def test_worth_rejects_a_worth_that_is_not_a_number(worth):
 
 
 @pytest.mark.parametrize("worth", [NAN, INF, pandas.Series([NAN]).iloc[0],
-                                   pandas.Series([INF]).iloc[0]],
-                         ids=["nan", "inf", "numpy_nan", "numpy_inf"])
+                                   pandas.Series([INF]).iloc[0], 10**400, Fraction(10**400)],
+                         ids=["nan", "inf", "numpy_nan", "numpy_inf", "huge_int", "huge_fraction"])
 def test_worth_rejects_a_worth_that_is_not_finite(worth):
     bvm = BVM(TABLE)
     bvm.sensitive(["s"])
